@@ -1,0 +1,19 @@
+# อิมเมจต้องมีเฉพาะไฟล์ที่เสิร์ฟจริง — เดิม "COPY ." ทำให้ซอร์ส สคริปต์ build
+# และเอกสารภายใน (SRS · Roadmap · UAT · คู่มือ) เข้าถึงได้จากเว็บทั้งหมด
+.git
+.gitignore
+.dockerignore
+.claude
+node_modules
+dist
+docs
+build.js
+server.js
+regression_test.js
+package.json
+package-lock.json
+README.md
+Dockerfile
+_headers
+*.log
+.DS_Store

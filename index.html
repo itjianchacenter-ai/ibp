@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JIAN CHA · IBP Demand-Sensing Control Tower</title>
+<meta name="description" content="JIAN CHA IBP Demand-Sensing &amp; S&amp;OP Control Tower — Module 02+ Sales Forecast (FoodStory POS monthly rolling), Supply Review, ABC/XYZ, Scenario Planning.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/tower.css">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<header class="cover">
+  <div class="wrap">
+    <div>
+      <div class="wordmark"><div class="cn">见茶山</div><div class="en">JIAN CHA</div></div>
+      <h1>IBP Demand-Sensing &amp; S&amp;OP Control Tower</h1>
+      <div class="sub">Live sell-out monitoring จาก JC-Sale Report ผสาน Statistical Baseline &amp; Consensus Demand (v6.30) — เพื่อ Demand Sensing, PO / Demand Planning Rolling, Supply Review และ Pre-S&amp;OP Scenario Planning</div>
+    </div>
+    <div class="meta">
+      <div><span class="livedot"></span><b>LIVE</b> · On-demand (Route A)</div>
+      <div>Snapshot: <b>23 Jul 2026, 13:50</b></div>
+      <div>Sell-out MTD: <b>1 – 23 Jul 2026</b></div>
+      <div>Baseline cycle: <b>August 2026 · v6.30</b></div>
+      <div>Sales Forecast: <b>self-serve upload</b></div>
+      <div>Prepared by: <b>SCM / IBP / IT</b></div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs"><div class="wrap">
+  <a href="#m1"><span class="n">01</span>Demand Sensing</a>
+  <a href="#m2"><span class="n">02</span>Per-Menu Demand Plan</a>
+  <a href="#fc"><span class="n">02+</span>Sales Forecast</a>
+  <a href="#m3"><span class="n">03</span>Supply &amp; Inventory Review</a>
+  <a href="#m3b"><span class="n">3+</span>Stock Cover &amp; Movement</a>
+  <a href="#m3c"><span class="n">3++</span>ABC / XYZ</a>
+  <a href="#m4"><span class="n">04</span>Scenario Planning</a>
+  <a href="#explorer"><span class="n">⤓</span>Data Explorer</a>
+  <a href="#actions"><span class="n">05</span>Actions &amp; Governance</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- LIVE DATA & REFRESH CONTROL -->
+<div class="refreshbar">
+  <div class="rb-top">
+    <div class="rb-title">&#9670; Live Data Sources &amp; Refresh</div>
+    <div class="rb-stamp">Artifact refreshed: <b>24 Jul 2026, 19:59</b> (Asia/Bangkok) &middot; + SKU Filter ใน Module 3++ ABC/XYZ (หมวด/คลัง/ค้นหา · จัดกลุ่มใหม่ตามสโคป) &middot; Mode: <b>On-demand &middot; Route A</b></div>
+  </div>
+  <div class="srcgrid">
+    <div class="srcchip">
+      <div class="s-nm">POS Sell-Out &middot; JC-Sale Report</div>
+      <div class="s-meta">dashboard.jc-group-global.com &middot; Module 01 + live overlay</div>
+      <span class="s-badge live">&#9679; LIVE &middot; pull 23 Jul 13:50</span>
+    </div>
+    <div class="srcchip">
+      <div class="s-nm">IBP Workbook v6.30</div>
+      <div class="s-meta">OneDrive &middot; Baseline / Consensus / NPD (Mod 02, 04)</div>
+      <span class="s-badge sync">&#9689; SYNCED &middot; v6.30</span>
+    </div>
+    <div class="srcchip">
+      <div class="s-nm">Sell-In &middot; Business Central</div>
+      <div class="s-meta">Dynamics 365 BC &middot; triangulation (Mod 01)</div>
+      <span class="s-badge month">&#9681; MONTHLY &middot; Jun 2026</span>
+    </div>
+    <div class="srcchip">
+      <div class="s-nm">Inventory &middot; DOI Segmentation</div>
+      <div class="s-meta">OneDrive &middot; DOH / expiry watch (Mod 03)</div>
+      <span class="s-badge month">&#9681; MONTHLY &middot; Jun 2026</span>
+    </div>
+    <div class="srcchip">
+      <div class="s-nm">FoodStory POS &middot; Sales History</div>
+      <div class="s-meta">อัปโหลดไฟล์เอง (CSV/XLSX) &middot; Monthly rolling forecast (Mod 02+)</div>
+      <span class="s-badge sync">&#9689; ON-UPLOAD &middot; ผู้ใช้ควบคุมเอง</span>
+    </div>
+    <div class="srcchip">
+      <div class="s-nm">Warehouse Stock &middot; CTI / Bangkaew / DC-NAVANAKORN</div>
+      <div class="s-meta">CTINV CurrentStock (สดจากอีเมล) + Inv Control Tower (Mod 3+)</div>
+      <span class="s-badge live">&#9679; 24 Jul (สด) / Jun30</span>
+    </div>
+  </div>
+  <div class="howto"><b>&#8635; วิธีรีเฟรช (Route A &middot; On-demand):</b> เปิด/ล็อกอิน <b>JC-Sale Report</b> ค้างไว้ใน Chrome แล้วพิมพ์บอกผมว่า <code>refresh ยอดขาย</code> &mdash; ผมจะดึง sell-out MTD + intraday ล่าสุดมาอัปเดต <b>Module 01</b> และ live overlay ใน <b>Module 04</b> แล้ว publish ทับ artifact เดิมในคลังให้ทันที (ตัวเลข Module 02/03 มาจาก IBP workbook &mdash; อัปเดตเมื่อปิดรอบ demand review) <b>&middot; Module 02+ Sales Forecast</b> อัปเดตเองได้ทันทีโดยอัปโหลด export จาก FoodStory &mdash; ไม่ต้องรอผม</div>
+</div>
+
+<!-- MODULE 1 -->
+<section id="m1">
+  <div class="eyebrow">MODULE 01 · DEMAND SENSING SCORECARD<span class="src-tag live">&#9679; LIVE · POS</span></div>
+  <div class="sechead"><span class="ghost">01</span><h2>สัญญาณดีมานด์เรียลไทม์ · Sell-Out × Sell-In × Forecast</h2></div>
+  <hr class="rule">
+
+  <div class="datacut">⚠ <b>Data-sync note:</b> Dashboard menu-level (Top-15 / หมวดหมู่ / ช่องทางชำระ) ให้ข้อมูลเฉพาะมุมมอง <b>รายวัน</b> — มุมมองรายเดือนขึ้น "ไม่มีข้อมูล" (sync ค้าง ~1 ชม.) ดังนั้นตัวเลข cup รายเมนูรายเดือนใช้จาก IBP workbook (authoritative) และเสริมด้วย live velocity รายวันจาก dashboard</div>
+
+  <div class="kpis">
+    <div class="kpi dark">
+      <div class="lab">Sell-Out MTD (1–23 Jul)</div>
+      <div class="val">฿33.50<small> M</small></div>
+      <div class="sub">181,244 บิล · ฿184.81/บิล</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">Like-for-Like Pace</div>
+      <div class="val down">▼8.5%</div>
+      <div class="sub">฿1.456M/วัน vs Jun ฿1.592M/วัน<br><span class="mut small">(หัวข่าว dashboard ▼29.9% = 23 วัน เทียบ 30 วันเต็ม — ไม่ apples-to-apples)</span></div>
+    </div>
+    <div class="kpi">
+      <div class="lab">Month-End Projection</div>
+      <div class="val">~฿45.1<small> M</small></div>
+      <div class="sub">Linear run-rate ×31 วัน · vs Jun ฿47.76M = <span class="down">▼5.5%</span></div>
+    </div>
+    <div class="kpi">
+      <div class="lab">vs Target ฿61M</div>
+      <div class="val down">74%</div>
+      <div class="sub">Gap −฿15.9M · เป้าไม่สมจริง → เสนอ reset</div>
+    </div>
+  </div>
+
+  <div class="callout pos"><b>✅ Scope anchor:</b> Dashboard "เดือนที่แล้ว" มิ.ย. = <span class="k">฿47,761,644</span> ตรงกับ IBP Sell-out June <span class="k">฿47.78M</span> เป๊ะ → ยืนยันว่า dashboard = ขอบเขต sell-out เดียวกับ MKT ใช้ triangulate ได้เชื่อถือ</div>
+
+  <div class="cards2" style="margin-top:18px">
+    <div class="card">
+      <h3>Today's Live Pulse · 23 Jul (intraday 13:50)</h3>
+      <div class="cap">ยอดขายสุทธิวันนี้ ฿731,513 · 3,311 บิล · 35.9% ของเป้าวัน</div>
+      <div class="bar-row"><span class="nm">Smoothie</span><div class="track"><div class="fill grape" style="width:100%"></div></div><span class="vv"><b>฿503K</b> · 4,069</span></div>
+      <div class="bar-row"><span class="nm">Mochi / Taro</span><div class="track"><div class="fill" style="width:15.3%"></div></div><span class="vv"><b>฿77K</b> · 524</span></div>
+      <div class="bar-row"><span class="nm">Milk Tea</span><div class="track"><div class="fill" style="width:11.5%"></div></div><span class="vv"><b>฿58K</b> · 528</span></div>
+      <div class="bar-row"><span class="nm">Fresh Tea</span><div class="track"><div class="fill" style="width:8.7%"></div></div><span class="vv"><b>฿44K</b> · 536</span></div>
+      <div class="bar-row"><span class="nm">Cold (Fruit)</span><div class="track"><div class="fill" style="width:5.7%"></div></div><span class="vv"><b>฿29K</b> · 233</span></div>
+      <div class="bar-row"><span class="nm">Thai Tea</span><div class="track"><div class="fill" style="width:2.6%"></div></div><span class="vv"><b>฿13K</b> · 91</span></div>
+      <div class="bar-row"><span class="nm">Topping</span><div class="track"><div class="fill" style="width:2.3%"></div></div><span class="vv"><b>฿11K</b> · 442</span></div>
+      <div class="callout grape" style="margin-top:14px"><b>Smoothie = 68.8% ของรายได้วันนี้</b> · Grape-family 3,743 แก้ว = 58% ของแก้วทั้งหมด → ยืนยัน concentration risk (SM1 ~39%) และดีมานด์วัตถุดิบองุ่นสูง</div>
+    </div>
+    <div class="card">
+      <h3>Channel Mix · Delivery-First (live)</h3>
+      <div class="cap">ช่องทางชำระเงินวันนี้ 23 Jul</div>
+      <div class="bar-row"><span class="nm">GRAB</span><div class="track"><div class="fill warn" style="width:100%"></div></div><span class="vv"><b>฿547K</b> · 74.7%</span></div>
+      <div class="bar-row"><span class="nm">VISA (in-store)</span><div class="track"><div class="fill" style="width:30.4%"></div></div><span class="vv"><b>฿166K</b> · 22.7%</span></div>
+      <div class="bar-row"><span class="nm">Cash</span><div class="track"><div class="fill" style="width:3.5%"></div></div><span class="vv"><b>฿19K</b> · 2.6%</span></div>
+      <div class="bar-row"><span class="nm">Staff welfare</span><div class="track"><div class="fill" style="width:0.6%"></div></div><span class="vv"><b>฿3.5K</b> · 0.5%</span></div>
+      <div class="callout warn" style="margin-top:14px"><b>GRAB 74.7%</b> ของรายได้ (มิ.ย. delivery mix 55.5%) → intraday สูงกว่าค่าเฉลี่ยเดือนมาก. วางแผน demand/capacity เป็น <b>delivery-first</b>; เฝ้า Grab uptime เป็น KPI (มิ.ย. pause 81 ชม. = เสีย ~฿109K)</div>
+      <div class="callout neg"><b>Sell-in ↔ Sell-out divergence:</b> Sell-in +13.2% MoM (มิ.ย. ฿11.71M) แต่ sell-out −4% → แฟรนไชส์ stock-up นำ (Fresh Fruit +640%). <b>Bullwhip guard:</b> ถ้า Jul sell-out ไม่ตาม → Aug sell-in หดแรง</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Demand Signal Levers → ผลต่อ Aug Plan</h3>
+    <div class="cap">หลักฐานจาก live dashboard + IBP Jun actual</div>
+    <div class="lever"><span><b>Lychee-Grape / Longan NPD ติดตลาด</b></span><span class="dir u">▲▲</span><span class="mut">Live: SM41 = <b>#2</b> (841 แก้ว/วัน), SM40 #4, SM43, SM9 ติด Top-15 → NPD จริงขายดี, ต้อง sync NPD calendar เข้า MRP</span></div>
+    <div class="lever"><span><b>Grape hero (SM1) แข็งแรง</b></span><span class="dir u">▲▲</span><span class="mut">Live #1 = 1,964 แก้ว/วัน · Grab Grape 74฿ มิ.ย. ทำ 213% เป้า → ต่อแคมเปญ</span></div>
+    <div class="lever"><span><b>Sell-in Fresh Fruit (องุ่น) +640%</b></span><span class="dir u">▲</span><span class="mut">องุ่นถูกดันเข้าสาขาแล้ว ฿1.71M → upside Jul แต่เสี่ยง expiry ถ้า sell-out ไม่ตาม</span></div>
+    <div class="lever"><span><b>Dine-in decline / Delivery shift</b></span><span class="dir d">▼</span><span class="mut">มิ.ย. dine-in −18% · avg 162→150฿ → กด revenue/แก้ว, mix เลื่อนไป Cold</span></div>
+    <div class="lever"><span><b>Fresh Tea อ่อน (ฤดูฝน)</b></span><span class="dir d">▼</span><span class="mut">Trade Fresh Tea 140฿ ขายได้ 0.3% ของเป้า → รับ Naive baseline, uplift 0%</span></div>
+    <div class="lever"><span><b>Execution/ops risk รายสาขา</b></span><span class="dir d">▼</span><span class="mut">JC002 Banthat Thong ส่วนลดสินค้า ฿247K (41.8% ของ gross!) · JF008 credit memo · เฝ้าระวัง</span></div>
+  </div>
+</section>
+
+<!-- MODULE 2 -->
+<section id="m2">
+  <div class="eyebrow">MODULE 02 · PER-MENU DEMAND PLAN<span class="src-tag wb">&#9689; WORKBOOK v6.30</span></div>
+  <div class="sechead"><span class="ghost">02</span><h2>แผนดีมานด์รายเมนู (แก้ว) × ช่องทาง · สิงหาคม 2026</h2></div>
+  <hr class="rule">
+  <p class="mut small" style="margin-bottom:16px">Baseline = Statistical (Provisional Jun-anchored, v6.30) · Consensus = Baseline × (1 + Differentiated Uplift) · <b>Live velocity</b> = แก้ว/วัน จาก JC-Sale Report (23 Jul intraday) ใช้เป็น demand-sensing overlay · ช่องทาง FC = Franchise, MS = Master/Company · หน่วย = แก้ว (cups)</p>
+
+  <div class="card" style="padding:14px 16px">
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th class="l">เมนู (SKU)</th>
+      <th>Jun Actual</th><th>Baseline Aug</th><th>Uplift</th><th>Consensus Aug</th>
+      <th>Live แก้ว/วัน<br><span class="mut">23 Jul</span></th><th class="l">Signal</th>
+    </tr></thead>
+    <tbody>
+      <tr><td class="l"><b>SM1</b> ชาองุ่นปั่นสด Grape Smoothie <span class="pill grape">HERO</span></td><td>162,564</td><td>162,564</td><td class="up">+8%</td><td><b>175,569</b></td><td><b>1,964</b></td><td class="l"><span class="tag grape">#1 live</span></td></tr>
+      <tr><td class="l"><b>M1</b> ชานมคามิเลีย Camellia Milk Tea</td><td>19,393</td><td>19,393</td><td class="up">+5%</td><td>20,362</td><td>205</td><td class="l"><span class="tag pos">stable</span></td></tr>
+      <tr><td class="l"><b>SM8</b> ชาองุ่นเขียวปั่น Green Grape <span class="pill" style="background:#f6e9e4;color:#9c4a37">SKU?</span></td><td>18,855</td><td>17,018</td><td class="up">+3%</td><td>17,529</td><td>250</td><td class="l"><span class="tag warn">code MISSING</span></td></tr>
+      <tr><td class="l"><b>SM3</b> ชาส้มปั่น Orange Smoothie</td><td>16,633</td><td>16,321</td><td class="up">+5%</td><td>17,137</td><td>149</td><td class="l"><span class="tag">watch</span></td></tr>
+      <tr><td class="l"><b>C6</b> ชานมโมจิเผือกหอม Mochi Taro</td><td>15,069</td><td>15,069</td><td class="up">+3%</td><td>15,521</td><td>346</td><td class="l"><span class="tag pos">#3 live</span></td></tr>
+      <tr><td class="l"><b>SM17</b> ยัวร์วิชเกรป Your Wish : Grape</td><td>12,836</td><td>12,836</td><td class="up">+8%</td><td>13,862</td><td>115</td><td class="l"><span class="tag grape">grape fam</span></td></tr>
+      <tr><td class="l"><b>Cream Cheese</b> ครีมชีส (topping)</td><td>13,477</td><td>13,477</td><td class="up">+3%</td><td>13,881</td><td>—</td><td class="l"><span class="tag">attach-rate</span></td></tr>
+      <tr><td class="l"><b>C7</b> ชานมโมจิดรีมมี่ Mochi Dreamy</td><td>9,543</td><td>9,543</td><td class="up">+3%</td><td>9,829</td><td>104</td><td class="l"><span class="tag">ramp</span></td></tr>
+      <tr><td class="l"><b>M2</b> ชานมหอมหมื่นลี้ Osmanthus MT</td><td>8,842</td><td>8,842</td><td class="up">+5%</td><td>9,284</td><td>155</td><td class="l"><span class="tag pos">stable</span></td></tr>
+      <tr><td class="l"><b>SM16</b> อโฟรไดท์คิส Grape Yogurt</td><td>8,026</td><td>8,026</td><td class="up">+5%</td><td>8,427</td><td>151</td><td class="l"><span class="tag grape">grape fam</span></td></tr>
+      <tr><td class="l"><b>M4</b> ชานมมะลิ Jasmine Milk Tea</td><td>6,431</td><td>6,431</td><td class="up">+5%</td><td>6,753</td><td>—</td><td class="l"><span class="tag">ramp</span></td></tr>
+      <tr><td class="l"><b>C8</b> ชานมเผือกหอม Taro Milk Tea</td><td>5,134</td><td>5,134</td><td class="up">+3%</td><td>5,288</td><td>—</td><td class="l"><span class="tag">ramp</span></td></tr>
+      <tr><td class="l"><b>Jelly</b> เจลลี่บุก (topping)</td><td>4,851</td><td>4,851</td><td class="up">+3%</td><td>4,997</td><td>—</td><td class="l"><span class="tag">attach-rate</span></td></tr>
+      <tr><td class="l"><b>C1</b> ชาส้มสด Fresh Orange</td><td>4,829</td><td>4,829</td><td class="up">+3%</td><td>4,974</td><td>—</td><td class="l"><span class="tag">ramp</span></td></tr>
+      <tr><td class="l"><b>F2</b> ชาใสหอมหมื่นลี้ Osmanthus Tea</td><td>4,537</td><td>4,537</td><td>0%</td><td>4,537</td><td>170</td><td class="l"><span class="tag">rainy 0%</span></td></tr>
+      <tr><td class="l"><b>F4</b> ชาใสมะลิ Jasmine Fresh Tea</td><td>5,233</td><td>5,233</td><td>0%</td><td>5,233</td><td>—</td><td class="l"><span class="tag">rainy 0%</span></td></tr>
+      <tr><td class="l"><b>F1</b> ชาใสคามิเลีย Camellia Fresh</td><td>3,574</td><td>3,574</td><td>0%</td><td>3,574</td><td>133</td><td class="l"><span class="tag">rainy 0%</span></td></tr>
+      <tr><td class="l"><b>F3</b> ชาใสพีชขาว White Peach</td><td>3,711</td><td>3,711</td><td>0%</td><td>3,711</td><td>—</td><td class="l"><span class="tag">rainy 0%</span></td></tr>
+      <tr class="tot"><td class="l">TOP-20 CONSENSUS (Aug)</td><td>323,445</td><td>321,389</td><td class="up">+5% blend</td><td>340,468</td><td>—</td><td class="l">แก้ว</td></tr>
+    </tbody>
+  </table>
+  </div>
+  </div>
+
+  <div class="cards2" style="margin-top:16px">
+    <div class="card">
+      <h3>NPD Launches · Aug 2026 <span class="pill">+76,625 แก้ว</span></h3>
+      <div class="cap">แยกจาก Top-20 · ห้าม double-count · live dashboard ยืนยัน 4 SKU ติดตลาดแล้ว</div>
+      <table>
+        <thead><tr><th class="l">NPD</th><th>Launch</th><th>Aug แก้ว</th><th class="l">Live</th></tr></thead>
+        <tbody>
+        <tr class="npd"><td class="l">Grape Ice Tea <span class="mut">(cann. SM1)</span></td><td>10 Jul</td><td>16,740</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Green Grape Ice Tea <span class="mut">(cann. SM8)</span></td><td>10 Jul</td><td>16,740</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Mango Pandan Smoothie <span class="mut">(hero)</span></td><td>4 Aug</td><td>8,089</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Apple Milk Tea / Cream Cheese</td><td>4 Aug</td><td>9,072</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Milo Camellia / Creamcheese</td><td>4 Aug</td><td>6,048</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Coco glow / Coconut Cheese Pop</td><td>1 Jul</td><td>6,696</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Pink Guava series (×3)</td><td>15 Jul</td><td>7,192</td><td class="l">—</td></tr>
+        <tr class="npd"><td class="l">Green Mango / Mango Sticky / others</td><td>4 Aug</td><td>6,048</td><td class="l">—</td></tr>
+        <tr class="tot"><td class="l">TOTAL NPD (Aug)</td><td></td><td>76,625</td><td class="l"></td></tr>
+        </tbody>
+      </table>
+      <div class="callout grape"><b>Live proof:</b> SM41 Lychee-Grape (841/วัน = <b>#2</b>), SM40 Lychee Yogurt Grape (321), SM43 (101), SM9 Osmanthus-Longan (94) ขายจริงติด Top-15 — เป็น NPD ที่ MKT launch จริง (Lychee/Longan) ต่างจากแผน IBP เดิม → <b>sync NPD calendar เข้า MRP ด่วน</b></div>
+    </div>
+    <div class="card ink">
+      <h3>Aug Consensus Demand — Grand Total</h3>
+      <div class="cap" style="color:var(--jc-grey-2)">Top-20 Consensus + NPD (แก้ว)</div>
+      <div style="font-size:44px;font-weight:700;letter-spacing:-.02em;margin:6px 0">417,093</div>
+      <div class="mut">แก้ว · สิงหาคม 2026 (ก่อนที่ประชุม Demand Review)</div>
+      <hr style="border:0;border-top:1px solid #3A362F;margin:16px 0">
+      <div class="bar-row" style="grid-template-columns:1fr auto"><span class="nm" style="color:var(--jc-paper)">Top-20 Consensus</span><span class="vv"><b style="color:var(--jc-paper)">340,468</b></span></div>
+      <div class="bar-row" style="grid-template-columns:1fr auto"><span class="nm" style="color:var(--jc-paper)">NPD Aug</span><span class="vv"><b style="color:var(--jc-paper)">76,625</b></span></div>
+      <div class="callout" style="border-color:var(--peach);color:var(--jc-taupe-2)"><b style="color:var(--peach)">⏳ ยืนยันในที่ประชุม:</b> (1) Uplift ต่อ SKU (blended +5% แบบ differentiated — <b>ไม่</b>ใช้ blanket +20%) (2) Time-Fence Aug (ดู Module 03) (3) แก้รหัส SKU SM8 (4) service level Pink Guava</div>
+      <p class="small mut" style="margin-top:10px">แนวทาง: Top-20 ลดต่อเนื่อง 3 เดือน (Apr 365K→May 356K→Jun 323K แก้ว) · Jun WMAPE 14.4% · Naive ชนะ backtest ช่วงขาลง → uplift แบบ differentiated ตามหมวด กัน over-forecast/expiry</p>
+    </div>
+  </div>
+</section>
+
+<!-- MODULE 02+ · SALES FORECAST (POS ROLLING) -->
+<section id="fc">
+  <div class="eyebrow">MODULE 02+ · SALES FORECAST · MONTHLY ROLLING<span class="src-tag live">&#9679; FOODSTORY POS · UPLOAD</span></div>
+  <div class="sechead"><span class="ghost">02+</span><h2>Sales Forecast &middot; พยากรณ์ยอดขายเดือนถัดไป · รายเมนู/SKU &times; ช่องทาง</h2></div>
+  <hr class="rule">
+  <p class="mut small" style="margin-bottom:4px">อัปโหลดไฟล์ประวัติการขายรายเดือนจาก <b>FoodStory POS</b> (CSV/XLSX) &rarr; ระบบจัดเป็น <b>monthly rolling matrix ราย SKU &times; ช่องทาง</b> แล้วทดสอบ 7 วิธีพยากรณ์ด้วย backtest เลือกวิธีที่ WMAPE ต่ำสุดให้อัตโนมัติ<b>ราย SKU</b> · ทุกอย่างคำนวณในเบราว์เซอร์ ไฟล์ไม่ถูกส่งออกจากเครื่อง</p>
+
+  <div class="fcsteps">
+    <div class="fcstep on" id="fcs1"><div class="sn">STEP 01</div><div class="st">Export จาก FoodStory</div><div class="sd">รายงานยอดขายรายสินค้า ย้อนหลัง 12–24 เดือน</div></div>
+    <div class="fcstep" id="fcs2"><div class="sn">STEP 02</div><div class="st">อัปโหลดไฟล์</div><div class="sd">ลากวางหรือคลิกเลือก · .csv .xlsx</div></div>
+    <div class="fcstep" id="fcs3"><div class="sn">STEP 03</div><div class="st">จับคู่คอลัมน์</div><div class="sd">ระบบเดาให้ก่อน — แก้ได้</div></div>
+    <div class="fcstep" id="fcs4"><div class="sn">STEP 04</div><div class="st">ทบทวนพยากรณ์</div><div class="sd">ดู WMAPE/Bias · เทียบ Module 02</div></div>
+    <div class="fcstep" id="fcs5"><div class="sn">STEP 05</div><div class="st">Override &amp; ส่งต่อ</div><div class="sd">บันทึกเหตุผล · Export · ป้อน PR</div></div>
+  </div>
+
+  <!-- 1 · UPLOAD -->
+  <div class="cards2">
+    <div class="card">
+      <h3>1 &middot; นำเข้าข้อมูล FoodStory POS</h3>
+      <div class="cap">ประวัติการขายรายเดือน &middot; รองรับทั้งแบบ long และ wide</div>
+      <div class="drop" id="fcdrop">
+        <div class="dt">&#8681; ลากไฟล์มาวางตรงนี้ หรือคลิกเพื่อเลือก</div>
+        <div class="dd">รองรับ .csv &middot; .xlsx &middot; .xls &nbsp;|&nbsp; ไฟล์อยู่ในเครื่องคุณเท่านั้น ไม่มีการอัปโหลดขึ้นเซิร์ฟเวอร์</div>
+      </div>
+      <input type="file" id="fcfile" accept=".csv,.xlsx,.xls,text/csv" style="display:none">
+      <div class="fcbtns">
+        <button class="expbtn ghostbtn" id="fctpl" type="button">&#8681; ดาวน์โหลดเทมเพลต</button>
+        <button class="expbtn ghostbtn" id="fcdemo" type="button">โหลดข้อมูลตัวอย่าง (DEMO)</button>
+        <button class="expbtn ghostbtn" id="fcclear" type="button">ล้างข้อมูล</button>
+      </div>
+      <div class="fcstatus" id="fcstat">ยังไม่มีข้อมูล — อัปโหลดไฟล์ หรือกด <b>DEMO</b> เพื่อทดลองกลไก</div>
+    </div>
+    <div class="card">
+      <h3>รูปแบบไฟล์ที่รองรับ</h3>
+      <div class="cap">ส่งออกจาก FoodStory แบบไหนก็ได้ — เลือกคอลัมน์ทีหลัง</div>
+      <ul class="clean">
+        <li><b>Long (แนะนำ)</b> &mdash; 1 แถว = 1 SKU × 1 เดือน × 1 ช่องทาง · คอลัมน์: เดือน / รหัสสินค้า / ชื่อ / ช่องทาง / จำนวนแก้ว / ยอดขาย</li>
+        <li><b>Wide</b> &mdash; 1 แถว = 1 SKU · เดือนเป็นหัวคอลัมน์ (ม.ค. 69, Feb-26, 2026-03 …) ระบบ pivot ให้อัตโนมัติ</li>
+        <li>รองรับปี <b>พ.ศ.</b> (2569) และชื่อเดือนไทย (ม.ค. ก.พ. มี.ค. …) แปลงเป็น ค.ศ. อัตโนมัติ</li>
+        <li>ไม่มีคอลัมน์ช่องทางก็ได้ — ระบบจะรวมเป็นช่องทางเดียว (ALL)</li>
+        <li class="warn">ต้องมีอย่างน้อย <b>4 เดือน</b> ต่อ SKU จึง backtest ได้ · ถ้ามี ≥12 เดือน ระบบจะเปิดวิธี Seasonal Naive ให้อัตโนมัติ</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 2 · MAPPING -->
+  <div class="card" id="fcmapcard" style="margin-top:16px;display:none">
+    <h3>2 &middot; จับคู่คอลัมน์ &amp; กำหนดช่องทาง</h3>
+    <div class="cap">ระบบเดาจากหัวตารางให้แล้ว &mdash; ตรวจแล้วแก้ได้ถ้าไม่ตรง</div>
+    <div class="fcctl">
+      <label>รูปแบบไฟล์<select id="fclayout"><option value="long">Long · เดือนอยู่ในคอลัมน์เดียว</option><option value="wide">Wide · เดือนแยกเป็นหลายคอลัมน์</option></select></label>
+      <label>หน่วยที่พยากรณ์<select id="fcunit"><option value="qty">จำนวน (แก้ว/หน่วย)</option><option value="amt">มูลค่าขาย (฿)</option></select></label>
+      <button class="expbtn" id="fcrun" type="button">⚡ ประมวลผล &amp; พยากรณ์</button>
+    </div>
+    <div class="mapgrid">
+      <label>รหัส SKU / รหัสสินค้า<select id="mcode"></select></label>
+      <label>ชื่อเมนู / สินค้า<select id="mname"></select></label>
+      <label id="mmonthwrap">เดือน / วันที่<select id="mmonth"></select></label>
+      <label>ช่องทาง / สาขา / ประเภทออเดอร์<select id="mch"></select></label>
+      <label id="mqtywrap">จำนวน (แก้ว)<select id="mqty"></select></label>
+      <label id="mamtwrap">ยอดขาย (฿) &mdash; ไม่บังคับ<select id="mamt"></select></label>
+      <label style="grid-column:1/3">กฎจับกลุ่มช่องทาง (บรรทัดละ 1 กลุ่ม &middot; ชื่อกลุ่ม = คำค้น, คำค้น)<textarea id="mchrules"></textarea></label>
+      <label>กลุ่มตั้งต้น (ไม่เข้ากฎใด)<input id="mchelse" type="text" value="อื่น ๆ"></label>
+    </div>
+    <div class="fcstatus" id="fcmapstat"></div>
+  </div>
+
+  <!-- 3 · ENGINE CONTROLS + RESULTS -->
+  <div class="card" id="fcenginecard" style="margin-top:16px;display:none">
+    <h3>3 &middot; พารามิเตอร์พยากรณ์</h3>
+    <div class="cap">ปรับสด &middot; ตารางคำนวณใหม่ทันที</div>
+    <div class="fcctl">
+      <label>เดือนที่พยากรณ์<select id="fctarget"></select></label>
+      <label>วิธี<select id="fcmethod">
+        <option value="auto">Auto · เลือกจาก backtest (แนะนำ)</option>
+        <option value="naive">Naive · เดือนล่าสุด</option>
+        <option value="ma3">Moving Average 3M</option>
+        <option value="ma6">Moving Average 6M</option>
+        <option value="wma">Weighted MA (0.5/0.3/0.2)</option>
+        <option value="ses">Exponential Smoothing</option>
+        <option value="trend">Linear Trend</option>
+        <option value="snaive">Seasonal Naive (12M)</option>
+      </select></label>
+      <label>Holdout (เดือน)<input id="fchold" class="num" type="number" min="1" max="12" step="1" value="3"></label>
+      <label>SES &alpha;<input id="fcalpha" class="num" type="number" min="0.05" max="0.95" step="0.05" value="0.3"></label>
+      <label>ขั้นต่ำประวัติ (เดือน)<input id="fcmin" class="num" type="number" min="2" max="12" step="1" value="4"></label>
+      <label class="chk"><input type="checkbox" id="fcdays" checked> ปรับตามจำนวนวันในเดือน</label>
+      <label class="chk"><input type="checkbox" id="fcwins" checked> ตัด outlier (winsorize)</label>
+      <label class="chk"><input type="checkbox" id="fcpart"> ตัดเดือนล่าสุดทิ้ง (ข้อมูลไม่ครบเดือน)</label>
+      <label>ธงเตือน gap vs แผน (%)<input id="fcgap" class="num" type="number" min="1" max="100" step="1" value="15"></label>
+    </div>
+
+    <div class="kpis" id="fckpis" style="margin:18px 0 4px"></div>
+    <div class="methmix" id="fcmix"></div>
+    <div class="callout pos" id="fcinsight" style="margin-top:14px"></div>
+  </div>
+
+  <!-- 4 · TABLE -->
+  <div class="card" id="fctablecard" style="margin-top:16px;display:none">
+    <h3>4 &middot; ตารางพยากรณ์ &middot; ทบทวน &amp; แก้ตัวเลข (Override)</h3>
+    <div class="cap">แก้ตัวเลขในช่อง Override ได้เลย &middot; ใส่เหตุผลทุกครั้งเพื่อเก็บเป็น audit trail</div>
+    <div class="fcctl">
+      <label>มุมมอง<select id="fcview"><option value="sku">รวมราย SKU (เทียบ Module 02)</option><option value="ch">SKU × ช่องทาง</option></select></label>
+      <label>ช่องทาง<select id="fcfch"><option value="">ทั้งหมด</option></select></label>
+      <label>ค้นหา SKU / ชื่อ<input id="fcq" type="text" placeholder="รหัส หรือ ชื่อ..."></label>
+      <label class="chk"><input type="checkbox" id="fconlyflag"> เฉพาะรายการที่ต้องตัดสินใจ</label>
+      <label>ผู้ทบทวน (บันทึกใน override)<input id="fcby" type="text" placeholder="ชื่อผู้วางแผน"></label>
+      <button class="expbtn ghostbtn" id="fcovclr" type="button">ล้าง override ทั้งหมด</button>
+    </div>
+    <div id="fccount" class="small mut" style="margin-bottom:8px"></div>
+    <div style="overflow:auto;max-height:620px"><table id="fctbl"></table></div>
+    <div class="fcbtns" style="margin-top:16px">
+      <button class="expbtn" id="fcxlsx" type="button">&#8681; Export Excel (4 ชีต)</button>
+      <button class="expbtn ghostbtn" id="fccsv" type="button">&#8681; CSV</button>
+      <button class="expbtn ghostbtn" id="fctopr" type="button">&rarr; ป้อนเข้า Suggested PR</button>
+      <span class="prparam" id="fcprstat"></span>
+    </div>
+    <div class="prnote" style="margin-top:14px"><b>ข้อจำกัดที่ต้องรู้:</b> การป้อนเข้า Suggested PR ใช้ <b>Demand Index ระดับรวม</b> (พยากรณ์เดือนถัดไป &divide; เดือนล่าสุด) คูณกับอัตราเบิกใช้วัตถุดิบเดิม &mdash; เป็น proxy ระหว่างทางเท่านั้น เพราะยังไม่มี <b>BOM / recipe explosion</b> จากแก้ว→วัตถุดิบ. การแปลงราย SKU ที่ถูกต้องต้อง feed สูตรการผลิตเข้ามาก่อน (งานถัดไป).</div>
+  </div>
+
+  <div class="card" id="fcemptycard" style="margin-top:16px">
+    <div class="fcempty">ยังไม่มีข้อมูลพยากรณ์<br><span class="small">อัปโหลดไฟล์ FoodStory ด้านบน หรือกด &ldquo;โหลดข้อมูลตัวอย่าง (DEMO)&rdquo; เพื่อดูการทำงานของ engine ก่อนใช้ของจริง</span></div>
+  </div>
+</section>
+
+<!-- MODULE 3 -->
+<section id="m3">
+  <div class="eyebrow">MODULE 03 · SUPPLY REVIEW &amp; INVENTORY<span class="src-tag wb">&#9689; WORKBOOK + DOI</span></div>
+  <div class="sechead"><span class="ghost">03</span><h2>Supply Review · Inventory · PO Trigger</h2></div>
+  <hr class="rule">
+
+  <div class="cards3">
+    <div class="card">
+      <h3>Time-Fence Conflict</h3>
+      <div class="cap">Frozen commitment vs Stat baseline</div>
+      <div style="font-size:15px;margin:6px 0"><span class="mut">Frozen (เดิม):</span> <b>403,904</b> แก้ว</div>
+      <div style="font-size:15px;margin:6px 0"><span class="mut">Stat baseline:</span> <b>321,389</b> แก้ว</div>
+      <div class="prog"><i style="width:80%;background:var(--neg)"></i></div>
+      <div class="callout neg"><b>Over-commit −20%</b> → สัญญาณผลิต/สั่งเกิน. หารือ PO/CEO ก่อนเปิด PO วัตถุดิบรอบ Aug — ปรับลงหา consensus 340K + NPD</div>
+    </div>
+    <div class="card">
+      <h3>Fresh Fruit / Grape — Expiry Watch</h3>
+      <div class="cap">Perishable · DOH control</div>
+      <div class="callout grape" style="margin-top:0"><b>Grape demand pull สูงมาก:</b> live 3,743 แก้ว grape-family/วัน + sell-in องุ่น +640% (฿1.71M เข้าสาขาแล้ว)</div>
+      <ul class="clean">
+        <li class="warn">Fresh Fruit เป็นของสด — ถ้า sell-out ไม่ตามทัน sell-in → เสี่ยง expiry/waste ที่สาขา</li>
+        <li class="warn">GP% หด −4.3pp (46.3→42.1%) จาก mix องุ่น/ผลไม้ → review ราคา/ต้นทุนก่อน scale</li>
+        <li class="act">ตั้ง <b>DOH ผลไม้สด</b> + waste% เป็น KPI รายสัปดาห์</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>PO / Rolling Trigger</h3>
+      <div class="cap">Demand Planning rolling — สิ้นเดือน</div>
+      <ul class="clean">
+        <li class="act">เปิด PO วัตถุดิบ Aug ตาม <b>Consensus 340,468 + NPD 76,625</b> (ไม่ใช่ Frozen 403,904)</li>
+        <li class="act">เพิ่ม safety stock <b>องุ่น</b> ตาม live velocity แต่คุม DOH กัน expiry</li>
+        <li class="act">Buffer NPD Lychee-Grape/Longan (ยอดจริงพุ่ง) + Mango Aug hero</li>
+        <li class="warn">Rolling refresh เมื่อเติม <b>Jul actual</b> → baseline สลับเป็น Jul-anchored อัตโนมัติ</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Store-Level Sell-Out Signals · MTD (จาก 59 สาขา)</h3>
+    <div class="cap">Demand sensing รายสาขา — สำหรับ DRP / allocation · top &amp; risk movers</div>
+    <div class="cards2">
+      <div>
+        <div class="small" style="font-weight:600;color:var(--pos);margin-bottom:6px">▲ GAINERS / TOP RUN-RATE</div>
+        <div class="bar-row"><span class="nm">JF056 Robinson Suvarnabhumi</span><div class="track"><div class="fill pos" style="width:100%"></div></div><span class="vv"><b>฿1.00M</b></span></div>
+        <div class="bar-row"><span class="nm">JF045 Charn Avenue</span><div class="track"><div class="fill pos" style="width:99.7%"></div></div><span class="vv"><b>฿1.00M</b></span></div>
+        <div class="bar-row"><span class="nm">JF062 Mega Bangna</span><div class="track"><div class="fill pos" style="width:97.7%"></div></div><span class="vv"><b>฿0.98M</b></span></div>
+        <div class="bar-row"><span class="nm">JF058 PTT Park Srinakarin</span><div class="track"><div class="fill pos" style="width:86.8%"></div></div><span class="vv"><b>+27.1%</b></span></div>
+        <div class="small mut">JF058 = สาขาใหม่ ramp (เดียวที่โต YoY ในกลุ่มนำ) · JC011 Shell Ram Inthra &amp; JC013 = สาขาใหม่เพิ่ม volume</div>
+      </div>
+      <div>
+        <div class="small" style="font-weight:600;color:var(--neg);margin-bottom:6px">▼ RISK / DECLINE (เฝ้าระวัง demand &amp; ops)</div>
+        <div class="bar-row"><span class="nm">JF020 Unilever</span><div class="track"><div class="fill" style="width:100%;background:var(--neg)"></div></div><span class="vv"><b class="down">▼50.3%</b></span></div>
+        <div class="bar-row"><span class="nm">JC002 Banthat Thong</span><div class="track"><div class="fill" style="width:95%;background:var(--neg)"></div></div><span class="vv"><b class="down">▼47.9%</b></span></div>
+        <div class="bar-row"><span class="nm">JF026 Esplanade Khaerai</span><div class="track"><div class="fill" style="width:94%;background:var(--neg)"></div></div><span class="vv"><b class="down">▼47.6%</b></span></div>
+        <div class="bar-row"><span class="nm">JF027 Central Westgate</span><div class="track"><div class="fill" style="width:90%;background:var(--neg)"></div></div><span class="vv"><b class="down">▼45.6%</b></span></div>
+        <div class="small mut">JC002 ส่วนลดสินค้า ฿247K = 41.8% ของ gross → margin/execution flag ด่วน · หลายสาขาห้าง ▼ จากฐานสูงเดือนก่อน + วันขายน้อยลง</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODULE 3B · STOCK COVER & MOVEMENT (WAREHOUSE) -->
+<section id="m3b">
+  <div class="eyebrow">MODULE 03+ · STOCK COVER · MOVEMENT · AGING<span class="src-tag wb">&#9689; CTI / BANGKAEW WAREHOUSE</span></div>
+  <div class="sechead"><span class="ghost">3+</span><h2>DOH / Stock Cover Days &amp; Stock Movement · คลังกลาง</h2></div>
+  <hr class="rule">
+
+  <div class="datacut">⚠ <b>ขอบเขตข้อมูล:</b> ระดับ <b>คลังกลาง CTI + Bangkaew (+ DC-NAVAN สำหรับ aging)</b> — <b>ไม่ใช่</b>ราย 60 สาขา (per-store DOH มีเฉพาะใน FoodStory ซึ่ง export หน้าใหญ่ค้าง — รอทำ feed แยก) · Data cut: <b>30 มิ.ย.</b> (balance/มูลค่า/movement) &amp; <b>24 ก.ค. (สด)</b> (aging/on-hand DC-NAVANAKORN) · แหล่ง: Inventory Control Tower Jun2026 + JUNE_BASELINE (unit_cost) + CTINV CurrentStockSummary 24.07.2026 (ดึงสดจากอีเมล CTI ผ่าน Outlook)</div>
+
+  <div class="kpis">
+    <div class="kpi dark">
+      <div class="lab">Total Stock Value (Jun30)</div>
+      <div class="val">฿68.9<small> M</small></div>
+      <div class="sub">Bangkaew ฿38.3M · CTI ฿29.3M · Spare ฿1.4M</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">Ending Balance (Qty)</div>
+      <div class="val">99,294</div>
+      <div class="sub">Opening 101,183 · net <span class="down">▼1,739 (−1.7%)</span> · 616 SKU</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">Monthly Flow (Qty)</div>
+      <div class="val">IN 4,039 <small>/ OUT 5,778</small></div>
+      <div class="sub">OUT &gt; IN 1.43× → ระบายสต๊อกสุทธิ (เดือน มิ.ย.)</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">Expiry Exposure (24 ก.ค.)</div>
+      <div class="val down">164 <small>qty หมดอายุ</small></div>
+      <div class="sub">8 SKU หมดอายุ + 610 qty วิกฤต ≤30 วัน (DC-NAVANAKORN) → เร่งตัดจำหน่าย/FEFO</div>
+    </div>
+  </div>
+
+  <!-- STOCK TURNOVER · ITR (added 24 Jul 2026) -->
+  <div class="card" style="margin-top:18px">
+    <div class="eyebrow" style="margin-bottom:3px">STOCK TURNOVER · INVENTORY TURNOVER RATIO (ITR)<span class="src-tag wb">&#9689; TRAILING-3M BASIS</span></div>
+    <h3>Stock Turnover · อัตราหมุนสต๊อกจากค่าเฉลี่ยการเบิกใช้ (Value &times; Quantity)</h3>
+    <div class="cap">ITR = Avg consumption (OUT) &divide; Avg inventory &middot; annualized &middot; ฐาน trailing-3M (<b>interim = มิ.ย. actual</b> จนกว่า เม.ย./พ.ค. feed เข้า)</div>
+
+    <div class="cards3" style="margin-top:8px">
+      <div class="card ink">
+        <div class="cap" style="color:var(--jc-taupe-2)">Value ITR &middot; ฐานมูลค่า (฿)</div>
+        <div style="font-size:34px;font-weight:700;letter-spacing:-.02em">0.53<small style="font-size:15px;font-weight:500;color:var(--jc-taupe-2)"> &times;/ปี</small></div>
+        <div class="mut small" style="color:var(--jc-taupe-2)">&asymp; 0.044 &times;/เดือน &middot; DIO &asymp; 690 วัน</div>
+        <div class="small" style="color:var(--jc-taupe-2);margin-top:6px">Consumption มิ.ย. &asymp; ฿3.05M &divide; avg stock ฿68.9M</div>
+      </div>
+      <div class="card">
+        <div class="cap">Quantity ITR &middot; ฐานจำนวน (units)</div>
+        <div style="font-size:34px;font-weight:700;letter-spacing:-.02em">0.69<small style="font-size:15px;font-weight:500;color:var(--jc-grey)"> &times;/ปี</small></div>
+        <div class="mut small">&asymp; 0.058 &times;/เดือน &middot; DIO &asymp; 528 วัน</div>
+        <div class="small mut" style="margin-top:6px">OUT 5,778 &divide; avg on-hand 100,238 units</div>
+      </div>
+      <div class="card">
+        <div class="cap">อ่านค่า &middot; Interpretation</div>
+        <div class="small">ITR &lt; 1&times;/ปี = สต๊อกหมุน<b>ช้ามาก</b> เงินจม/เสี่ยงหมดอายุ. Benchmark วัตถุดิบ F&amp;B ควร <b>&gt; 6&ndash;12&times;/ปี</b> &middot; Packaging + Tea Leave กดค่าเฉลี่ยรวมลงหนัก</div>
+      </div>
+    </div>
+
+    <div class="cards2" style="margin-top:14px">
+      <div class="card">
+        <h3 style="font-size:14px">Turnover รายหมวด &middot; annualized (&times;/ปี)</h3>
+        <div class="cap">= 365 &divide; DOH &middot; เรียงเร็ว &rarr; ช้า</div>
+        <div class="bar-row"><span class="nm">05 Cleaning</span><div class="track"><div class="fill pos" style="width:100%"></div></div><span class="vv"><b>2.81</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">08 Equipment</span><div class="track"><div class="fill pos" style="width:72.6%"></div></div><span class="vv"><b>2.04</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">03 Ingredient</span><div class="track"><div class="fill grape" style="width:55.2%"></div></div><span class="vv"><b>1.55</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">10 Printing</span><div class="track"><div class="fill" style="width:40.2%"></div></div><span class="vv"><b>1.13</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">11 Premium Gift</span><div class="track"><div class="fill warn" style="width:20.6%"></div></div><span class="vv"><b>0.58</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">04 Packaging</span><div class="track"><div class="fill" style="width:10.7%;background:var(--neg)"></div></div><span class="vv"><b>0.30</b>&times;</span></div>
+        <div class="bar-row"><span class="nm">02 Tea Leave</span><div class="track"><div class="fill" style="width:10.3%;background:var(--neg)"></div></div><span class="vv"><b>0.29</b>&times;</span></div>
+        <div class="callout neg" style="margin-top:10px"><b>Tea Leave &amp; Packaging &lt; 0.3&times;/ปี</b> = dead-slow, ถือมูลค่า 73% ของสต๊อก (฿50.4M) &rarr; review min/max &amp; lot size ก่อนเปิด PO รอบใหม่</div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:14px">สูตรคำนวณ &amp; ฐานข้อมูล</h3>
+        <ul class="clean">
+          <li><b>Value ITR</b> = &Sigma;(OUT &times; unit_cost) &times;(12/n เดือน) &divide; มูลค่าสต๊อกเฉลี่ย</li>
+          <li><b>Qty ITR</b> = &Sigma; OUT &times;(12/n) &divide; ((Opening + Ending)/2)</li>
+          <li><b>DIO</b> (Days Inventory Outstanding) = 365 &divide; ITR &middot; ต่างจาก Cover-Days เล็กน้อยเพราะใช้ avg inventory ไม่ใช่ ending</li>
+          <li class="warn"><b>Trailing-3M interim:</b> ตอนนี้ใช้ มิ.ย. actual เดือนเดียว &mdash; ต้อง feed OUT <b>เม.ย./พ.ค.</b> (qty + ฿) จาก IBP workbook เพื่อได้ค่าเฉลี่ย 3 เดือนจริง</li>
+          <li class="warn"><b>Avg inventory (฿)</b> ใช้ Jun30 เป็น proxy (ยังไม่มี opening value) &middot; consumption value ประเมินจาก avg unit_cost รายหมวด</li>
+          <li class="warn">สืบทอด caveat: reconciliation gap <b>218,807 units</b> &mdash; ปิด inventory accuracy ก่อนใช้ ITR ตัดสินใจสั่งซื้อจริง</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards2" style="margin-top:18px">
+    <div class="card">
+      <h3>รับเข้า → เบิกออก → คงเหลือ · รายคลัง</h3>
+      <div class="cap">Stock movement (Qty) · มิ.ย. 2026 · Opening → +IN → −OUT → Ending</div>
+      <table>
+        <thead><tr><th class="l">คลัง</th><th>SKU</th><th>Opening</th><th>+ IN</th><th>− OUT</th><th>Ending</th><th>Δ</th></tr></thead>
+        <tbody>
+          <tr><td class="l"><b>CTI</b></td><td>201</td><td>27,569</td><td class="up">2,410</td><td class="down">2,704</td><td><b>27,275</b></td><td class="down">▼294</td></tr>
+          <tr><td class="l"><b>Bangkaew</b></td><td>415</td><td>73,614</td><td class="up">1,629</td><td class="down">3,074</td><td><b>72,019</b></td><td class="down">▼1,445</td></tr>
+          <tr class="tot"><td class="l">รวม</td><td>616</td><td>101,183</td><td>4,039</td><td>5,778</td><td>99,294</td><td>▼1,739</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn" style="margin-top:12px"><b>เบิกออก &gt; รับเข้า ทั้ง 2 คลัง</b> → สต๊อกไหลลง โดยยังไม่มีการเติมชดเชย. ผูกกับ PO Trigger (Module 03): เปิดซื้อวัตถุดิบตาม Consensus ก่อน Ending ลงต่ำกว่า reorder</div>
+    </div>
+    <div class="card">
+      <h3>Aging / Shelf-Life Buckets <span class="pill">126 SKU · DC-NAVANAKORN · 24 ก.ค.</span></h3>
+      <div class="cap">แบ่งตามวันคงเหลือถึงหมดอายุ · CTINV CurrentStock ณ <b>24 ก.ค. 2026 02:46</b> · 303 ล็อต · onhand 25,817 หน่วย</div>
+      <div class="bar-row"><span class="nm">ปกติ (&gt;180 วัน)</span><div class="track"><div class="fill pos" style="width:100%"></div></div><span class="vv"><b>17,282</b> · 79</span></div>
+      <div class="bar-row"><span class="nm">เฝ้าดู (91–180)</span><div class="track"><div class="fill" style="width:43.1%"></div></div><span class="vv"><b>7,444</b> · 34</span></div>
+      <div class="bar-row"><span class="nm">เฝ้าระวัง (31–90)</span><div class="track"><div class="fill warn" style="width:4%"></div></div><span class="vv"><b>317</b> · 17</span></div>
+      <div class="bar-row"><span class="nm">วิกฤต (≤30 วัน)</span><div class="track"><div class="fill" style="width:3.5%;background:var(--neg)"></div></div><span class="vv"><b>610</b> · 3</span></div>
+      <div class="bar-row"><span class="nm">หมดอายุแล้ว (&lt;0)</span><div class="track"><div class="fill" style="width:1%;background:var(--jc-ink)"></div></div><span class="vv"><b>164</b> · 8</span></div>
+      <div class="callout neg" style="margin-top:12px"><b>เร่งด่วน (สด 24 ก.ค.):</b> Strawberry Juice (−191 วัน · 34), Green Grape Juice (−125 · 3), Sweetened Condensed Milk (−114 · 4), ผงเจลลี่ 1kg (−47 · 99) → <b>164 หน่วยหมดอายุแล้ว</b> ตัดจำหน่าย · Brown sugar เหลือ 19 วัน (~521 หน่วย) เร่งใช้/FEFO</div>
+    </div>
+  </div>
+
+  <div class="cards2" style="margin-top:16px">
+    <div class="card">
+      <h3>Cover-Days by Category</h3>
+      <div class="cap">DOH = Ending ÷ (OUT/วัน) · สูง = หมุนช้า/เสี่ยง overstock · ต่ำ = หมุนเร็ว/เสี่ยงขาด</div>
+      <div class="bar-row"><span class="nm">02 Tea Leave</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="vv"><b>1,263</b>d</span></div>
+      <div class="bar-row"><span class="nm">04 Packaging</span><div class="track"><div class="fill" style="width:95.8%"></div></div><span class="vv"><b>1,210</b>d</span></div>
+      <div class="bar-row"><span class="nm">11 Premium Gift</span><div class="track"><div class="fill" style="width:50.1%"></div></div><span class="vv"><b>633</b>d</span></div>
+      <div class="bar-row"><span class="nm">10 Printing</span><div class="track"><div class="fill" style="width:25.7%"></div></div><span class="vv"><b>324</b>d</span></div>
+      <div class="bar-row"><span class="nm">03 Ingredient</span><div class="track"><div class="fill grape" style="width:18.7%"></div></div><span class="vv"><b>236</b>d</span></div>
+      <div class="bar-row"><span class="nm">08 Equipment</span><div class="track"><div class="fill" style="width:14.2%"></div></div><span class="vv"><b>179</b>d</span></div>
+      <div class="bar-row"><span class="nm">05 Cleaning</span><div class="track"><div class="fill pos" style="width:10.3%"></div></div><span class="vv"><b>130</b>d</span></div>
+      <div class="callout warn" style="margin-top:10px"><b>Packaging &amp; Tea Leave cover &gt;1,200 วัน</b> = เงินจมสูง (มูลค่า Packing ฿39.1M + Tea ฿11.3M = 73% ของสต๊อก) → review min/max, ลดล็อตสั่ง</div>
+    </div>
+    <div class="card">
+      <h3>Ingredient Movers · Stockout vs Overstock</h3>
+      <div class="cap">วัตถุดิบ (หมวด 03) เรียงตาม cover days</div>
+      <div class="small" style="font-weight:600;color:var(--neg);margin:2px 0 4px">▼ COVER ต่ำ — เสี่ยงขาด (เร่งเติม)</div>
+      <div class="bar-row"><span class="nm">Oh'Polly White Grape</span><div class="track"><div class="fill" style="width:100%;background:var(--neg)"></div></div><span class="vv"><b>15</b>d</span></div>
+      <div class="bar-row"><span class="nm">Butterfly Pea Powder</span><div class="track"><div class="fill" style="width:83%;background:var(--neg)"></div></div><span class="vv"><b>18</b>d</span></div>
+      <div class="bar-row"><span class="nm">Chia seeds 1000g</span><div class="track"><div class="fill" style="width:79%;background:var(--neg)"></div></div><span class="vv"><b>19</b>d</span></div>
+      <div class="bar-row"><span class="nm">Orange juice (1kg)</span><div class="track"><div class="fill warn" style="width:53%"></div></div><span class="vv"><b>32</b>d</span></div>
+      <div class="small" style="font-weight:600;color:#5f7040;margin:12px 0 4px">▲ COVER สูง — เงินจม/เสี่ยงหมดอายุ</div>
+      <div class="bar-row"><span class="nm">Skin milk powder</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="vv"><b>762</b>d</span></div>
+      <div class="bar-row"><span class="nm">Glucose Powder</span><div class="track"><div class="fill" style="width:94%"></div></div><span class="vv"><b>720</b>d</span></div>
+      <div class="bar-row"><span class="nm">Carrot Powder 500g</span><div class="track"><div class="fill" style="width:51%"></div></div><span class="vv"><b>387</b>d</span></div>
+      <div class="bar-row"><span class="nm">Water Chestnut 900g</span><div class="track"><div class="fill" style="width:18%"></div></div><span class="vv"><b>134</b>d</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Category · Value × Balance × Health</h3>
+    <div class="cap">มูลค่าสต๊อก (unit_cost × คงเหลือ, Jun30) + สุขภาพ SKU (Critical/Warning จาก variance &amp; no-movement)</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th class="l">หมวด</th><th>SKU</th><th>มูลค่า (฿)</th><th>Ending Qty</th><th>IN</th><th>OUT</th><th>DOH</th><th>Critical</th><th>Warning</th></tr></thead>
+      <tbody>
+        <tr><td class="l"><b>04 Packaging</b></td><td>117</td><td><b>39,066,072</b></td><td>37,826</td><td class="up">847</td><td class="down">938</td><td>1,210</td><td>0</td><td>38</td></tr>
+        <tr><td class="l"><b>03 Ingredient</b> <span class="pill grape">perishable</span></td><td>92</td><td><b>12,234,978</b></td><td>13,007</td><td class="up">1,437</td><td class="down">1,653</td><td>236</td><td>0</td><td class="down">12</td></tr>
+        <tr><td class="l"><b>02 Tea Leave</b></td><td>31</td><td><b>11,323,072</b></td><td>3,368</td><td>0</td><td class="down">80</td><td>1,263</td><td class="down">3</td><td class="down">13</td></tr>
+        <tr><td class="l"><b>11 Premium Gift</b></td><td>12</td><td>—</td><td>29,477</td><td>0</td><td class="down">1,396</td><td>633</td><td>0</td><td>5</td></tr>
+        <tr><td class="l"><b>12 Counter</b></td><td>66</td><td>—</td><td>66</td><td>5</td><td>0</td><td>999</td><td class="down">12</td><td>5</td></tr>
+        <tr><td class="l"><b>09 Spare part / อะไหล่</b></td><td>73</td><td>1,569,786</td><td>6,505</td><td>0</td><td class="down">349</td><td>340</td><td>0</td><td class="down">49</td></tr>
+        <tr><td class="l">อื่น ๆ (Equip/Clean/Uniform…)</td><td>225</td><td>1,142,312</td><td>9,045</td><td class="up">1,750</td><td class="down">1,362</td><td>—</td><td>0</td><td>40</td></tr>
+        <tr class="tot"><td class="l">รวม</td><td>616</td><td>~68,947,849</td><td>99,294</td><td>4,039</td><td>5,778</td><td>—</td><td>15</td><td>162</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout neg" style="margin-top:12px"><b>⚠ Data-quality flag:</b> reconciliation CTI-system ↔ physical count ต่างกันสะสม <b>218,807 หน่วย</b> (321 SKU) → ต้องปิด gap ให้ inventory accuracy ก่อนใช้ DOH ตัดสินใจสั่งซื้อจริง · <b>per-store DOH</b> รอ FoodStory feed (owner.foodstory.co · สินค้าคงคลัง)</div>
+  </div>
+</section>
+
+<!-- MODULE 3++ · ABC / XYZ SEGMENTATION -->
+<section id="m3c">
+  <div class="eyebrow">MODULE 3++ · ABC / XYZ SEGMENTATION<span class="src-tag wb">&#9689; WB + STOCK</span></div>
+  <div class="sechead"><span class="ghost">3++</span><h2>ABC / XYZ Segmentation · จัดลำดับความสำคัญ &amp; นโยบายสต็อกราย SKU</h2></div>
+  <hr class="rule">
+  <p class="mut small" style="margin-bottom:14px"><b>ABC</b> = จัดกลุ่มตามมูลค่า (Pareto 80/95) เพื่อทุ่มการควบคุมไปที่ SKU มูลค่าสูง · <b>XYZ</b> = ความผันผวนของดีมานด์ (CV จากยอดหลายเดือน) เพื่อเลือกกลยุทธ์วางแผน · รวมกันเป็น <b>9-box</b> ที่ผูกกับนโยบายสต็อก/PR. ปรับเกณฑ์ได้สด · <b>กรองตามหมวด/คลัง/ค้นหา SKU</b> เพื่อให้ tiles + Pareto + matrix จัดกลุ่ม ABC ใหม่เฉพาะสโคปที่เลือก (เช่น ABC ของหมวด "03 Ingredient" เท่านั้น). คอลัมน์ ABC/XYZ ในตาราง Data Explorer ยังเป็นระดับทั้งคลัง (global) และอัปเดตตามเกณฑ์.</p>
+  <div class="segctl">
+    <label>เกณฑ์ ABC (มูลค่า)<select id="abcbasis"><option value="consumption">มูลค่าการใช้ (OUT×ต้นทุน)</option><option value="inventory">มูลค่าสต็อก (Ending×ต้นทุน)</option></select></label>
+    <label>A ≤ (%สะสม)<input id="abca" class="num" type="number" min="1" max="98" step="1" value="80"></label>
+    <label>B ≤ (%สะสม)<input id="abcb" class="num" type="number" min="2" max="99" step="1" value="95"></label>
+    <label>หมวด (Category)<select id="segcat"><option value="">ทั้งหมด</option></select></label>
+    <label>คลัง (Warehouse)<select id="segwh"><option value="">ทั้งหมด</option></select></label>
+    <label>ค้นหา SKU / ชื่อ<input id="segq" type="text" placeholder="รหัส หรือ ชื่อ..."></label>
+    <button id="segreset" class="expbtn ghostbtn" type="button">ล้างตัวกรอง</button>
+  </div>
+  <div id="segcount" class="small mut" style="margin:-6px 0 14px"></div>
+  <div id="abcTiles" class="cards3"></div>
+  <div id="abcPareto" class="callout pos" style="margin-top:14px"></div>
+  <div class="card" style="margin-top:16px">
+    <h3>ABC × XYZ Matrix · 9-box + นโยบายที่แนะนำ</h3>
+    <div class="cap">จำนวน SKU ต่อช่อง (ABC ใช้ได้ทันที · XYZ รอ feed OUT รายเดือน) · แต่ละช่องมีนโยบายสต็อก/PR แนะนำ</div>
+    <div style="overflow:auto"><table class="mtx" id="abcMatrix"></table></div>
+  </div>
+  <div class="prnote" style="margin-top:14px"><b>เปิดใช้ XYZ:</b> feed ยอด OUT/ขายราย SKU ย้อนหลัง ≥3 เดือน (เม.ย./พ.ค./มิ.ย. จาก IBP workbook หรือ sell-out รายเดือนจาก JC-Sale Report). เมื่อมีข้อมูล ผมคำนวณ CV → <b>X</b> (CV≤0.5 นิ่ง) / <b>Y</b> (0.5–1.0 ผันผวน) / <b>Z</b> (&gt;1.0 กระท่อนกระแท่น) แล้ว 9-box จะเติมจำนวนอัตโนมัติ. <b>ตอนนี้:</b> ABC + มูลค่าใช้ได้จริง · XYZ = รอข้อมูล.</div>
+</section>
+
+<!-- DATA EXPLORER -->
+<section id="explorer">
+  <div class="eyebrow">DATA EXPLORER · FILTER &amp; EXPORT EXCEL</div>
+  <div class="sechead"><span class="ghost">&#8681;</span><h2>Data Explorer · กรองตาม SKU / หมวด แล้ว Export Excel</h2></div>
+  <hr class="rule">
+  <p class="mut small" style="margin-bottom:14px">เลือกชุดข้อมูล → กรองตามหมวด/คลัง/ค้นหา SKU → กด <b>Export Excel</b> หรือ <b>CSV</b> (ได้เฉพาะแถวที่กรองไว้). ข้อมูลฝังในหน้า: Warehouse Stock 616 SKU (Jun30 + ต้นทุน), Aging/Expiry 303 ล็อต (24 ก.ค.), Menu Demand Plan (Aug). ชุด <b>Warehouse Stock</b> ตอนนี้ผสาน <b>aging/expiry</b> (ใกล้หมดอายุ · หน่วยที่ ≤30 วัน), คำนวณ <b>Suggested PR ราย SKU (ก่อน OOS)</b>, ติดคลาส <b>ABC / XYZ</b> ราย SKU (ปรับเกณฑ์ได้ที่ Module 3++) พร้อม <b>subtotal ราย Category + TOTAL</b> ให้ตัวเลข tie กับ panel Module 03 ด้านบน.</p>
+  <div class="prnote"><b>Suggested PR (order-up-to):</b> ใช้/วัน = OUT ÷ 30 (Jun run-rate) · วันถึง OOS = DOH · <b>PR = max(0, ใช้/วัน × Target cover − Ending)</b> · สถานะ 🔴 = DOH ≤ Lead time (สั่งด่วน), 🟠 = DOH &lt; Target cover, 🟢 = พอ, ⚠ = มีสต็อกใกล้หมดอายุ (ระวังสั่งซ้ำ ให้เร่ง FEFO ก่อน). ปรับ Lead time / Target cover ได้สด. <b>ข้อควรระวัง:</b> OUT เป็น Jun เดือนเดียว (trailing-1M) — เป็นสัญญาณ provisional จนกว่าจะ feed OUT 3 เดือนจริง; aging มาจาก DC-NAVANAKORN ส่วน Ending มาจาก CTI/Bangkaew (มุมมองอายุระดับ SKU).</div>
+  <div class="card">
+    <div class="exp-controls">
+      <label>ชุดข้อมูล<select id="ds"></select></label>
+      <label id="catwrap">หมวด (Category)<select id="fcat"><option value="">ทั้งหมด</option></select></label>
+      <label id="whwrap">คลัง (Warehouse)<select id="fwh"><option value="">ทั้งหมด</option></select></label>
+      <label>ค้นหา SKU / ชื่อ<input id="fq" type="text" placeholder="รหัส หรือ ชื่อ..."></label>
+      <label id="leadwrap">Lead time (วัน)<input id="flead" class="num" type="number" min="0" step="1" value="14"></label>
+      <label id="coverwrap">Target cover (วัน)<input id="fcover" class="num" type="number" min="1" step="1" value="45"></label>
+      <button id="btnxlsx" class="expbtn">&#8681; Export Excel</button>
+      <button id="btncsv" class="expbtn ghostbtn">&#8681; CSV</button>
+    </div>
+    <div id="prbasisnote" class="small mut" style="margin-bottom:6px"><b>ฐานดีมานด์:</b> Jun run-rate (OUT ÷ 30) &middot; เปลี่ยนเป็นฐานพยากรณ์ได้ที่ปุ่ม &ldquo;ป้อนเข้า Suggested PR&rdquo; ใน <a href="#fc" style="color:var(--jc-espresso)">Module 02+</a></div>
+    <div id="expcount" class="small mut" style="margin-bottom:8px"></div>
+    <div style="overflow:auto;max-height:540px"><table id="exptbl"></table></div>
+  </div>
+</section>
+
+<!-- MODULE 4 -->
+<section id="m4">
+  <div class="eyebrow">MODULE 04 · PRE-S&amp;OP SCENARIO PLANNING<span class="src-tag wb">&#9689; WB + LIVE overlay</span></div>
+  <div class="sechead"><span class="ghost">04</span><h2>Scenario Planning · July Revenue Bridge</h2></div>
+  <hr class="rule">
+  <p class="mut small" style="margin-bottom:18px">Revenue bridge จากฐาน Jun ฿47.78M · <b>Live overlay:</b> MTD pace → month-end projection ~฿45.1M กำลังวิ่งระหว่าง Bear–Base และ <b>ต่ำกว่า EV ฿50.5M</b> → สัญญาณให้ haircut demand plan / เร่ง lever ที่พิสูจน์แล้ว</p>
+
+  <div class="scen">
+    <div class="s">
+      <div class="nm">Bear · 25%</div>
+      <div class="big">฿46.5M</div>
+      <div class="mut small">76% ของ 61M · gap −14.5M</div>
+      <div class="prog"><i style="width:76%"></i></div>
+      <div class="small mut">Dine-in ลดต่อ + Grab pause + NPD ไม่ scale + Fresh Fruit expiry</div>
+    </div>
+    <div class="s base">
+      <div class="nm">Base · 50% ★</div>
+      <div class="big">฿50.5M</div>
+      <div class="mut small">83% ของ 61M · gap −10.5M</div>
+      <div class="prog"><i style="width:83%"></i></div>
+      <div class="small mut">+1 วันขาย + Lychee-Grape media + Grab Grape ต่อ + sell-in องุ่นหนุน + สาขาใหม่ หัก dine-in</div>
+    </div>
+    <div class="s">
+      <div class="nm">Bull · 25%</div>
+      <div class="big">฿54.5M</div>
+      <div class="mut small">89% ของ 61M · gap −6.5M</div>
+      <div class="prog"><i style="width:89%"></i></div>
+      <div class="small mut">ทุก lever ยิงพร้อม + Lychee-Grape viral + Grab ขยาย + sell-in → sell-out เต็มที่</div>
+    </div>
+  </div>
+
+  <div class="cards2" style="margin-top:16px">
+    <div class="card ink">
+      <h3>Prob-Weighted EV vs Live Signal</h3>
+      <div style="display:flex;gap:26px;align-items:baseline;margin:10px 0">
+        <div><div class="mut small">Model EV</div><div style="font-size:32px;font-weight:700">฿50.5M</div></div>
+        <div style="font-size:22px;color:var(--jc-grey-2)">→</div>
+        <div><div class="mut small">Live projection</div><div style="font-size:32px;font-weight:700;color:var(--peach)">~฿45.1M</div></div>
+      </div>
+      <div class="callout" style="border-color:var(--peach);color:var(--jc-taupe-2)"><b style="color:var(--peach)">Live &lt; EV:</b> ยอดจริง 23 วันวิ่งช้ากว่าที่โมเดล Base คาด → เอนไป Bear-to-Base. แนะนำวางแผน supply ที่ ~45–47M ไม่ใช่ 50.5M เพื่อลดความเสี่ยง overstock/expiry</div>
+    </div>
+    <div class="card">
+      <h3>Scenario → Supply Action</h3>
+      <ul class="clean">
+        <li>แตะเป้า 61M ต้องโต +27.7% MoM — <b>ไม่สมจริง</b> → เสนอ reset July target ~50.5M และสื่อสาร MC</li>
+        <li class="act">ผูก <b>Sell-in ↔ Sell-out gap %</b> เป็น KPI ถาวร (bullwhip guard)</li>
+        <li class="act">Supply plan ตาม EV-haircut + buffer เฉพาะ lever ที่พิสูจน์ (Grape 213%, NPD Lychee-Grape live #2)</li>
+        <li class="warn">เตรียม Aug sell-in อาจหด ถ้าสาขาระบายสต๊อกองุ่นที่ push ไปเดือนนี้</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ACTIONS -->
+<section id="actions">
+  <div class="eyebrow">MODULE 05 · RECOMMENDED ACTIONS &amp; GOVERNANCE</div>
+  <div class="sechead"><span class="ghost">05</span><h2>Actions · KPIs · Data Governance</h2></div>
+  <hr class="rule">
+
+  <div class="roadmap">
+    <div class="rm-row"><div class="h">STRATEGIC<span>Director / MC</span></div><div class="b"><ol>
+      <li>Reset July target ให้สมจริง (EV ~฿50.5M; live signal ~฿45–47M) + สื่อสาร Management Committee</li>
+      <li>ยอมรับ <b>Delivery-first</b> (GRAB 74.7% live) → วางแผน demand/capacity ตามช่องทาง</li>
+      <li>ตั้ง <b>Sell-in ↔ Sell-out gap %</b> เป็น KPI ถาวร เป็น bullwhip guard</li>
+    </ol></div></div>
+    <div class="rm-row"><div class="h">TACTICAL<span>SCM / MKT</span></div><div class="b"><ol>
+      <li>ต่อ Grab Grape 74฿ (มิ.ย. 213% เป้า) · อัด Lychee-Grape media เต็มเดือน (live #2 แล้ว)</li>
+      <li><b>Sync NPD calendar IBP ↔ MKT เข้า MRP</b> — แผนเดิม (Grape Ice/Mango) ≠ ที่ขายจริง (Lychee/Longan)</li>
+      <li>Margin review Fresh Fruit/องุ่น ก่อน scale (GP −4.3pp)</li>
+      <li>ปรับ PO/Demand plan Aug = Consensus 340K + NPD 77K (ไม่ใช่ Frozen 404K)</li>
+    </ol></div></div>
+    <div class="rm-row"><div class="h">OPERATIONAL<span>Ops / IT</span></div><div class="b"><ol>
+      <li>แก้ <b>dashboard sync</b> (menu รายเดือน "ไม่มีข้อมูล", ค้าง ~1 ชม.) เพื่อ demand sensing เต็มรูป</li>
+      <li>แก้รหัส SKU <b>SM8</b> (MISSING ใน master แต่ live ขาย 250/วัน) · ยืนยัน JF062 ไม่นับซ้ำ JC005</li>
+      <li>สอบ JC002 Banthat Thong ส่วนลด 41.8% · JF008 credit memo · เช็คสาขายอด 0 (JF030/031)</li>
+      <li>เฝ้า DOH Fresh Fruit กัน expiry · แก้ Grab pause · เติม Jul actual เข้า baseline สิ้นเดือน</li>
+    </ol></div></div>
+  </div>
+
+  <div class="cards2" style="margin-top:18px">
+    <div class="card">
+      <h3>Weekly KPIs — Control Tower</h3>
+      <ul class="clean">
+        <li>Weekly sell-out vs pro-rated target (like-for-like)</li>
+        <li>Sell-in ↔ Sell-out gap % (bullwhip)</li>
+        <li>Delivery / GRAB mix % · Grab uptime</li>
+        <li>NPD แก้ว/วัน/สาขา (Lychee-Grape, Mango)</li>
+        <li>Fresh Fruit DOH / waste% · GP%</li>
+        <li>SM1 / Grape-family concentration %</li>
+        <li>Forecast accuracy WMAPE / Bias</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Risks → Mitigation</h3>
+      <ul class="clean">
+        <li class="warn">SM1/Grape concentration ~39–58% → diversify ผ่าน NPD</li>
+        <li class="warn">Dine-in decline → delivery bundle / capacity</li>
+        <li class="warn">Fresh Fruit margin &amp; expiry → price + DOH review</li>
+        <li class="warn">Bullwhip Aug sell-in หด → ปรับ supply ล่วงหน้า</li>
+        <li class="warn">Data gaps (SM8, JF062, dashboard sync) → ops root-cause</li>
+        <li class="warn">Target miss → reset + focus lever ที่พิสูจน์แล้ว</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer><div class="wrap">
+  <div><b>见茶山 JIAN CHA · IBP Demand-Sensing &amp; S&amp;OP Control Tower</b> — <b>Live Artifact</b> (persisted in Cowork gallery). Refresh mode: <b>On-demand · Route A</b> — sell-out ดึงจาก JC-Sale Report ผ่าน Chrome ตามสั่ง แล้ว re-publish ทับตัวเดิม. <b>Module 02+ Sales Forecast</b> = self-serve — อัปโหลด export จาก FoodStory POS ในหน้านี้ได้เอง ประมวลผลในเบราว์เซอร์ทั้งหมด. Roadmap ถัดไป: BOM/recipe explosion (แก้ว→วัตถุดิบ) เพื่อให้ PR แม่นระดับ SKU, auto-refresh (Route B) เมื่อ JC-Sale Report ตั้ง export เข้า OneDrive/Outlook + drill-down รายสาขา/เมนู + what-if scenario slider.</div>
+  <div class="src"><b>แหล่งข้อมูล:</b> JC-Sale Report — dashboard.jc-group-global.com (Sell-out live, MTD 1–23 Jul 2026 &amp; intraday 23 Jul 13:50, 58–59 สาขา) · JIANCHA_Aug2026_StatForecast_DemandReview v6.30 (Baseline / Consensus / NPD / Scenario, SKU×channel) · Sell-in: Dynamics 365 Business Central (Jun 2026) · MKT Management 02/07. <b>Module 3+ (Stock):</b> Jiancha Inventory Control Tower Jun2026 + JUNE_BASELINE all-WH end stock (unit_cost) + CTINV CurrentStockSummary 24.07.2026 (DC-NAVANAKORN, lot-level on-hand + expiry, ดึงสดจากอีเมล CTI ผ่าน Outlook) — ระดับคลัง CTI+Bangkaew, balance/มูลค่า มิ.ย.30 · aging/on-hand 24 ก.ค.</div>
+  <div class="src">⚠ ตรวจสอบโดยผู้รู้ก่อนใช้จริง · ตัวเลข July = intraday/partial &amp; scenario ไม่ใช่ actual ปิดเดือน · reconcile กับ Finance ก่อนเผยแพร่ · dashboard menu รายเดือนติด sync ต้องแก้เพื่อ demand sensing เต็มรูป.</div>
+</div></footer>
+
+
+
+<!-- SheetJS · .xlsx read + 4-sheet Excel export. Degrades to CSV when unreachable (NFR-03). -->
+<!-- SheetJS จาก CDN ภายนอก — ผูก integrity ไว้ ถ้าไฟล์ถูกแก้บน CDN เบราว์เซอร์
+     จะปฏิเสธการรัน แล้วโมดูลถอยไปใช้เส้นทาง CSV ตาม NFR-03 เหมือนกรณีออฟไลน์ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/i18n-en.js"></script>
+<script src="assets/js/i18n.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/forecast.js"></script>
+<script src="assets/js/session.js"></script>
+</body>
+</html>
