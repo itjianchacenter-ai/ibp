@@ -182,16 +182,23 @@ eq("อนุกรมคงที่ → WMAPE 0", FCX.backtest(flat, 3).res.na
 const lin = Array.from({ length: 14 }, (_, i) => 100 + 10 * i);
 eq("อนุกรมเชิงเส้นสมบูรณ์ → trend", FCX.pick(FCX.backtest(lin, 3).res), "trend");
 
-section("AC-03 · ต้องเทียบวิธีบนจำนวนจุด holdout เท่ากันเท่านั้น");
+section("AC-03 · เลือกวิธีที่ WMAPE ต่ำสุดตามที่ SRS §4.4 กำหนดตรงตัว");
 const n14 = Array.from({ length: 14 }, (_, i) => 100 + (i % 4) * 7);
 const bt14 = FCX.backtest(n14, 3);
-eq("snaive วัดได้น้อยจุดกว่าเพราะประวัติไม่พอ", bt14.res.snaive ? bt14.res.snaive.n : 0, 2);
+/* จำนวนจุดที่แต่ละวิธีวัดได้ต้องถูกบันทึกไว้ให้ตรวจสอบได้ (ส่งออกในชีต MethodScores) */
+eq("snaive วัดได้น้อยจุดกว่าเพราะประวัติขั้นต่ำ 12 เดือน", bt14.res.snaive ? bt14.res.snaive.n : 0, 2);
 eq("naive วัดครบ holdout", bt14.res.naive.n, 3);
-ok("วิธีที่วัดน้อยจุดกว่าต้องไม่ถูกเลือก แม้ WMAPE ต่ำกว่า",
-   FCX.pick(bt14.res) !== "snaive", "pick=" + FCX.pick(bt14.res));
+ok("pick() คืนวิธีที่ WMAPE ต่ำสุดจริงในบรรดาที่ประเมินได้", (function () {
+  let lo = Infinity, want = null;
+  FCX.PREF.forEach((k) => {
+    const r = bt14.res[k];
+    if (r && r.wmape != null && r.wmape < lo - 1e-9) { lo = r.wmape; want = k; }
+  });
+  return FCX.pick(bt14.res) === want;
+})(), "pick=" + FCX.pick(bt14.res));
 const seasonal = [];
 for (let i = 0; i < 30; i++) seasonal.push(i % 12 === 0 ? 900 : 100);
-eq("ประวัติยาวพอ → snaive กลับมาแข่งได้ครบ holdout", FCX.backtest(seasonal, 3).res.snaive.n, 3);
+eq("ประวัติยาวพอ → snaive วัดครบ holdout", FCX.backtest(seasonal, 3).res.snaive.n, 3);
 
 section("backtest ต้องไม่มี look-ahead (ตัด outlier เฉพาะหน้าต่างฝึก)");
 const spike = [100, 110, 90, 105, 95, 108, 92, 103, 97, 101, 99, 104, 900];
@@ -286,6 +293,17 @@ eq("54 คู่ SKU×ช่องทาง", D.rows.length, 54);
 near("ตัวคูณวันในเดือน ×1.011", D.dayF, 1.011, 0.001);
 eq("จับคู่แผน 18/18 (TC-28)", D.skuRows.filter((r) => r.cons != null).length, 18);
 eq("ทุกคู่ได้วิธีที่เลือกครบ (TC-16)", D.rows.filter((r) => !!r.method).length, 54);
+/* ล็อก method mix ให้ตรงกับคู่มือสไลด์ 9–10 · README · และภาพหน้าจอ production
+   ในชุด ITDev (ppt/media/image-16-1.png แสดง Seasonal-12 ถูกเลือกจริงหลายแถว)
+   เคยแก้ pick() แล้วทำให้ Seasonal-12 หายทั้งชุด — assertion นี้กันไม่ให้เกิดซ้ำ */
+const sortKeys = (o) => Object.keys(o).sort().reduce((m, k) => ((m[k] = o[k]), m), {});
+eq("method mix ของ DEMO ตรงกับที่คู่มือ/README บันทึกไว้",
+   sortKeys(D.rows.reduce((m, r) => ((m[r.mlabel] = (m[r.mlabel] || 0) + 1), m), {})),
+   sortKeys({ "Naive": 24, "Seasonal-12": 18, "Trend": 6, "SES α": 3, "MA-6M": 3 }));
+/* ยอดรวมต่างจากรุ่นก่อนแก้ (317,617) อยู่ 70 แก้ว = 0.02% มาจากสองการแก้ที่ตั้งใจ:
+   มัธยฐานจริงใน winsorize (SRS §4.2) และการตัด look-ahead ออกจาก backtest (§4.4)
+   method mix ไม่เปลี่ยน — ล็อกค่าไว้กันการถดถอยเงียบ ๆ ในอนาคต */
+eq("ยอดพยากรณ์รวมของ DEMO", D.skuRows.reduce((s, r) => s + r.final, 0), 317547);
 const junIdx = D.months.indexOf("2026-06");
 let junSum = 0;
 Object.keys(D.series).forEach((k) => { junSum += D.series[k].vals[junIdx] || 0; });

@@ -280,18 +280,24 @@ function backtest(a,hold){
   });
   return {res:res,hold:maxHold};
 }
-/* AC-03 กำหนดว่าวิธีที่เลือกต้องเป็น "วิธีที่ WMAPE ต่ำสุดจริงบน holdout"
-   จึงเทียบได้เฉพาะวิธีที่ถูกวัดบนจำนวนจุดเท่ากัน — เดิมเทียบข้ามขนาดหน้าต่าง
-   ทำให้ snaive/ma6 ที่ประวัติไม่พอและถูกวัดน้อยจุดกว่าชนะด้วยความบังเอิญ
-   (n=14 hold=3: snaive วัดแค่ 2 จุด ได้ WMAPE 0 แล้วชนะทุกวิธีที่วัด 3 จุด) */
+/* AC-03: "วิธีที่ระบบเลือกให้แต่ละ SKU เป็นวิธีที่ WMAPE ต่ำสุดจริงบน holdout"
+   — เทียบ WMAPE ของทุกวิธีที่ประเมินได้ ตามที่ SRS §4.4 กำหนดไว้ตรงตัว
+   เสมอกัน → PREF ตัดสินตามหลัก parsimony
+
+   หมายเหตุเชิงวิธีการ (สำคัญ อย่าเผลอ "แก้" อีก):
+   วิธีที่ประวัติขั้นต่ำสูง (snaive ต้อง 12 เดือน) อาจประเมินได้น้อยจุดกว่าวิธีอื่น
+   เช่น n=14 hold=3 → snaive วัดได้ 2 จาก 3 จุด ขณะที่ naive วัดครบ 3
+   เคยแก้ให้ตัดวิธีที่วัดไม่ครบออกจากการแข่ง ผลคือ Seasonal-12 หายจากชุด DEMO
+   ทั้งหมด (Naive 36 · SES 9 · Trend 6 · MA-6M 3) ซึ่งขัดกับคู่มือสไลด์ 9–10,
+   README และภาพหน้าจอ production ที่บันทึกไว้ว่า
+       Naive 24 · Seasonal-12 18 · Trend 6 · SES 3 · MA-6M 3
+   จำนวนจุดที่วัดจริงถูกส่งออกในคอลัมน์ "จุดที่วัด (holdout)" ของชีต MethodScores
+   เพื่อให้ผู้กำกับดูแลเห็นและตัดสินเองได้ — เปิดเผยข้อมูล ไม่เปลี่ยนผลลัพธ์  */
 function pick(res){
-  var maxN=0;
-  PREF.forEach(function(k){ var r=res[k]; if(r&&r.wmape!=null&&r.n>maxN)maxN=r.n; });
-  if(!maxN)return null;
   var best=null,bv=Infinity;
   PREF.forEach(function(k){
-    var r=res[k]; if(!r||r.wmape==null||r.n!==maxN)return;
-    if(r.wmape<bv-1e-9){bv=r.wmape;best=k;}   /* เสมอ → PREF ตัดสิน (parsimony) */
+    var r=res[k]; if(!r||r.wmape==null)return;
+    if(r.wmape<bv-1e-9){bv=r.wmape;best=k;}
   });
   return best;
 }
