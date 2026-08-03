@@ -38,6 +38,10 @@ rsync -a --delete \
       "$SRC/index.html" "$WEB/"
 rsync -a --delete "$SRC/assets/"  "$WEB/assets/"
 rsync -a --delete "$SRC/samples/" "$WEB/samples/"
+echo "→ ประทับเวอร์ชันบน URL ของ asset (กัน cache ค้างหลัง deploy)"
+# ทำงานกับสำเนาใน $WEB เท่านั้น ไม่แตะซอร์สใน git และไม่แตะไซต์อื่นบนเครื่อง
+node "$SRC/deploy/stamp.js" "$WEB"
+
 chown -R www-data:www-data "$WEB"
 find "$WEB" -type d -exec chmod 755 {} \;
 find "$WEB" -type f -exec chmod 644 {} \;
