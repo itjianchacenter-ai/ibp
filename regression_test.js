@@ -471,6 +471,73 @@ eq("อ่านครบ 200 SKU", FCX.FC.skuRows.length, 200);
 eq("600 คู่ SKU×ช่องทาง", FCX.FC.rows.length, 600);
 ok("เสร็จภายใน 3 วินาที (" + (big.length - 1).toLocaleString() + " แถว · " + ms + " ms)", ms < 3000);
 
+/* ══ R-05 · ห้าม Module 02+ ทำ XYZ ของ Module 3++ หาย ═════════════════ */
+section("R-05 · feedHist ต้องไม่ล้าง HIST ตั้งต้นของ Module 3++");
+(function () {
+  /* v15 ส่ง HIST มาพร้อมโมดูล 3++ อยู่แล้ว (BC Item Ledger 12 เดือน) เทสต์ชุดเดิม
+     จับบั๊กนี้ไม่ได้เพราะ VM หลักไม่มี HIST เลย feedHist จึงคืน 0 แบบไม่มีอะไรเสีย */
+  const c = vm.createContext({
+    console, Date, Math, JSON, parseInt, parseFloat, isFinite, isNaN,
+    String, Number, Object, Array, Boolean, RegExp, Error,
+    Blob: function () {}, URL: { createObjectURL: () => "", revokeObjectURL() {} },
+    setTimeout, alert: () => {}, confirm: () => true,
+    document: {
+      getElementById: el, createElement: () => el("__t"), querySelectorAll: () => [],
+      querySelector: () => null, body: { appendChild() {} },
+      documentElement: { setAttribute() {} }, addEventListener() {},
+    },
+    window: { addEventListener() {} }, localStorage: undefined, navigator: { language: "th" },
+  });
+  c.globalThis = c; c.self = c; c.window.document = c.document;
+  vm.runInContext(rd("assets/js/data.js"), c);
+  vm.runInContext(rd("assets/js/store.js"), c);
+  vm.runInContext(`
+    var PARAM={lead:14,cover:45,basis:"jun",fcIndex:1};
+    var DATASETS={}; var segDrawn=0;
+    function csvEsc(v){return String(v==null?"":v);} function dl(){} function stamp(){return "x";}
+    function render(){} function renderSeg(){segDrawn++;} function recomputePR(){}
+    /* จำลอง HIST ของ v15 — ผูกกับรหัสวัตถุดิบจริง 3 ตัวแรกที่มีอยู่ */
+    var HIST={};
+    DATA.stock.slice(0,3).forEach(function(r,i){
+      HIST[r.code]=[10+i,12,9,14,11,13,10,12,15,11,9,12];
+    });
+    function computeXYZ(){
+      (DATA.stock||[]).forEach(function(r){
+        var h=HIST[r.code];
+        if(h&&h.length>=3){
+          var m=h.reduce(function(a,b){return a+b;},0)/h.length;
+          if(m<=0){r.xyz="Z";r.cv=null;return;}
+          var sd=Math.sqrt(h.reduce(function(a,b){return a+(b-m)*(b-m);},0)/h.length);
+          var cv=sd/m; r.cv=Math.round(cv*100)/100; r.xyz=cv<=0.5?"X":(cv<=1.0?"Y":"Z");
+        }else{ r.xyz="—"; r.cv=null; }
+      });
+    }
+    DATA.stock.forEach(function(r){ r.avgDaily=(r.out>0)?Math.round(r.out/30*100)/100:0; });
+    computeXYZ();
+  `, c);
+  vm.runInContext(rd("assets/js/forecast.js"), c);
+
+  const D = vm.runInContext("DATA", c);
+  const seeded = vm.runInContext("Object.keys(HIST)", c).slice();
+  const xyzBefore = D.stock.filter((r) => r.xyz !== "—").length;
+  eq("ตั้งต้น: HIST มี 3 รหัส", seeded.length, 3);
+  eq("ตั้งต้น: จัดคลาส XYZ ได้ 3 SKU", xyzBefore, 3);
+
+  vm.runInContext(`FCX.loadAOA(FCX.demoAOA(),"DEMO.csv",true); FCX.process(false); computeXYZ();`, c);
+
+  const after = vm.runInContext("Object.keys(HIST)", c);
+  ok("รัน Module 02+ แล้วรหัสตั้งต้นทั้ง 3 ยังอยู่ครบ",
+     seeded.every((k) => after.indexOf(k) >= 0));
+  eq("XYZ ของ Module 3++ ไม่หาย", D.stock.filter((r) => r.xyz !== "—").length, xyzBefore);
+  ok("ค่าประวัติเดิมไม่ถูก DEMO เขียนทับ",
+     JSON.stringify(vm.runInContext("HIST[" + JSON.stringify(seeded[0]) + "]", c))
+       === JSON.stringify([10, 12, 9, 14, 11, 13, 10, 12, 15, 11, 9, 12]));
+
+  /* รันซ้ำหลายรอบต้องไม่สะสมความเสียหาย */
+  vm.runInContext(`FCX.process(false); FCX.process(false); computeXYZ();`, c);
+  eq("รันซ้ำ 3 รอบ XYZ ยังคงเดิม", D.stock.filter((r) => r.xyz !== "—").length, xyzBefore);
+})();
+
 /* ══ สรุป ═════════════════════════════════════════════════════════════ */
 console.log("\n" + "─".repeat(66));
 if (fail) {

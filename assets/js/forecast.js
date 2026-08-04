@@ -472,20 +472,45 @@ function noteMaterialXyzGap(){
    ข้อจำกัดที่ต้องรู้: FC.series คีย์ด้วย "รหัสเมนู" ส่วน DATA.stock คีย์ด้วย
    "รหัสวัตถุดิบ" ซึ่งเป็นคนละชุดรหัส จึงจับคู่ได้เฉพาะรหัสที่ตรงกันจริง
    เท่านั้น รายการที่ไม่ตรงยังคงแสดง "—" ตามเดิม ไม่เดาแทน
-   การกระจายเมนู→วัตถุดิบอย่างถูกต้องต้องรอ BOM explosion (R-03)        */
+   การกระจายเมนู→วัตถุดิบอย่างถูกต้องต้องรอ BOM explosion (R-03)
+
+   สำคัญ: HIST มาพร้อม Module 3++ อยู่แล้ว 231 รหัส (BC Item Ledger 12 เดือน)
+   ห้ามล้างทิ้ง — รอบก่อนล้างทั้งก้อนก่อนเติม ทำให้เมทริกซ์ ABC×XYZ ที่เคยมีค่า
+   (X 38 · Y 44 · Z 180) กลายเป็น "—" ทั้งตารางทันทีที่มีคนใช้ Module 02+
+   และเพราะ session ถูกจำไว้ใน localStorage มันพังค้างทุกครั้งที่เปิดหน้าใหม่
+   ที่ถูกคือเก็บสำเนาตั้งต้นไว้ แล้วเขียนทับเฉพาะรหัสที่จับคู่ได้จริงเท่านั้น */
+var HIST_BASE=null;
+function histBase(){
+  if(HIST_BASE===null){
+    HIST_BASE={};
+    if(typeof HIST!=="undefined")
+      for(var b in HIST){ if(Object.prototype.hasOwnProperty.call(HIST,b))HIST_BASE[b]=HIST[b]; }
+  }
+  return HIST_BASE;
+}
+function histRestore(){
+  if(typeof HIST==="undefined")return;
+  var base=histBase();
+  for(var k in HIST){ if(Object.prototype.hasOwnProperty.call(HIST,k))delete HIST[k]; }
+  for(var b in base){ if(Object.prototype.hasOwnProperty.call(base,b))HIST[b]=base[b]; }
+}
 function feedHist(){
   if(typeof HIST==="undefined")return 0;
-  for(var k in HIST){ if(Object.prototype.hasOwnProperty.call(HIST,k))delete HIST[k]; }
+  histRestore();
   var bySku={};
   Object.keys(FC.series).forEach(function(key){
     var s=FC.series[key],c=String(s.code).trim().toUpperCase();
     if(!bySku[c])bySku[c]=s.vals.slice();
     else bySku[c]=bySku[c].map(function(v,i){return v+(s.vals[i]||0);});
   });
-  var hit=0;
+  var hit=0,base=histBase();
   (DATA.stock||[]).forEach(function(r){
     var h=bySku[String(r.code).trim().toUpperCase()];
-    if(h&&h.length>=3){ HIST[r.code]=h; hit++; }
+    if(!h||h.length<3)return;
+    /* ข้อมูล DEMO เป็นตัวเลขสังเคราะห์ ห้ามเขียนทับประวัติขายจริงจาก BC
+       ที่มีอยู่แล้ว — ไม่งั้น XYZ ของรหัสนั้นจะเพี้ยนโดยไม่มีใครรู้ */
+    if(FC.demo&&Object.prototype.hasOwnProperty.call(base,r.code))return;
+    HIST[r.code]=h; hit++;
   });
   if(typeof renderSeg==="function")renderSeg();
   return hit;
@@ -1184,7 +1209,9 @@ function reset(){
   /* UAT TC-51 · ล้างข้อมูล = กลับสู่สถานะเริ่มต้นจริง จึงต้องลบที่เก็บถาวรด้วย
      ไม่งั้น override รอบก่อนจะโผล่กลับมาทับรอบใหม่ */
   STORE.del("ovr"); STORE.del("session");
-  if(typeof HIST!=="undefined"){ for(var hk in HIST) delete HIST[hk]; if(typeof renderSeg==="function")renderSeg(); }
+  /* "ล้างข้อมูล" = ทิ้งเฉพาะที่ Module 02+ ป้อนเข้าไป ไม่ใช่ล้าง HIST ทั้งก้อน —
+     231 รหัสจาก BC Item Ledger เป็นของ Module 3++ มาแต่เดิม ไม่เกี่ยวกับเรา */
+  histRestore(); if(typeof renderSeg==="function")renderSeg();
   q("fcmapcard").style.display="none";q("fcenginecard").style.display="none";
   q("fctablecard").style.display="none";q("fcemptycard").style.display="";
   if(PARAM.basis==="fc"){PARAM.basis="jun";PARAM.fcIndex=1;recomputePR();if(typeof render==="function")render();}
