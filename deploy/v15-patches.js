@@ -576,6 +576,160 @@ module.exports = [
         "  /* [patch D4] */\n" +
         "  ((k.orphanN>0)?\" · <b style=\\\"color:#9c4a37\\\">อีก \"+nfm(Math.round(k.orphanCr))+\" หน่วยจาก \"+nfm(k.orphanN)+\" รหัส PO ที่ไม่มีในคลัง — หักกับแถวไหนไม่ได้ ต้องสอบทานรหัสที่ BC</b>\":\"\")+\n" +
         "  \" = ETA ในหน้าต่างป้องกัน (\"+PARAM.lead+\"+\"+PARAM.cover+\" วัน) \"+nfm(k.inw)+\" นับ 100% \"+",
+},
+
+/* ── E1 · ตัวกรองหมวดใน Forecast Accuracy เข้าไม่ถึง 3 หมวด ────────────
+   opts() สร้างตัวเลือกจาก FA.cat ซึ่งเป็นตารางสรุปที่มี 7 หมวด แต่ FA.rows
+   มีจริง 10 หมวด — JIANCHA · POLLY · 08 GIFT SET ไม่มีในรายการเลย
+   6 SKU (200001, NCS1, NCS2, NCS3, NCS5, NCS10) จึงเลือกดูไม่ได้
+   ต้องสร้างตัวเลือกจากข้อมูลจริง ไม่ใช่จากตารางสรุป                       */
+{
+  id: "E1-facat-options",
+  why: "ตัวกรองหมวดขาด 3 หมวด · 6 SKU เลือกดูไม่ได้เลย",
+  count: 1,
+  find: "  opts($('faFcat'),FA.cat.map(function(d){return d.key;}));",
+  repl: "  /* [patch E1] รวมหมวดจากแถวจริงเข้าไปด้วย ไม่งั้นหมวดที่ไม่อยู่ใน\n" +
+        "     ตารางสรุป (JIANCHA · POLLY · 08 GIFT SET) จะเลือกไม่ได้ */\n" +
+        "  (function(){\n" +
+        "    var seen={},list=[];\n" +
+        "    FA.cat.forEach(function(d){ if(d&&d.key&&!seen[d.key]){seen[d.key]=1;list.push(d.key);} });\n" +
+        "    FA.rows.forEach(function(r){ if(r&&r.cat&&!seen[r.cat]){seen[r.cat]=1;list.push(r.cat);} });\n" +
+        "    opts($('faFcat'),list);\n" +
+        "  })();",
+},
+
+/* ── E2 · ข้อความ "±5%" ไม่ผูกกับเกณฑ์ที่ปรับได้ ──────────────────────
+   ช่อง BIAS threshold ปรับได้ (faTbias) แต่คำอธิบายเขียน ±5% ตายตัว
+   ตั้งเกณฑ์เป็น 3% แล้วหน้าจอยังบอก "อยู่ในเกณฑ์ ±5%" ทั้งที่ตัดสินด้วย 3%
+   บั๊กชนิดเดียวกับ B3 (KPI ใช้ 666 ตารางใช้ 667) ที่แก้ด้วยการ single-source */
+{
+  id: "E2-bias-label-dynamic",
+  why: "ปรับเกณฑ์ BIAS แล้วคำอธิบายยังบอก ±5% ตายตัว",
+  count: 1,
+  find: "['BIAS', faS(k.bias)+'%', (Math.abs(k.bias)<=5?'อยู่ในเกณฑ์ ±5% — ไม่มีอคติเชิงระบบ':'เกินเกณฑ์ ±5% — มีอคติเชิงระบบ')],",
+  repl: "/* [patch E2] อ่านเกณฑ์จากช่องที่ผู้ใช้ตั้งจริง ไม่ใช่เลข 5 ที่พิมพ์ไว้ */\n" +
+        "  ['BIAS', faS(k.bias)+'%', (function(){var tb=faT().tbias;\n" +
+        "    return (Math.abs(k.bias)<=tb?'อยู่ในเกณฑ์ ±'+tb+'% — ไม่มีอคติเชิงระบบ'\n" +
+        "                                :'เกินเกณฑ์ ±'+tb+'% — มีอคติเชิงระบบ');})()],",
+},
+
+/* ── E3 · schParse รับวันที่ที่เป็นไปไม่ได้ และไม่รู้จักปี พ.ศ. ─────────
+   new Date(2026,12,1) เลื่อนไปเป็น ม.ค. 2027 เงียบ ๆ — "2026-13-01"
+   จึงกลายเป็นวันที่ที่ใช้งานได้ ทั้งที่ควรถูกปฏิเสธ
+   และปี พ.ศ. ไม่ถูกแปลง ต่างจาก schDate ที่แก้ไปแล้วใน C2 — ETA ที่มาเป็น
+   พ.ศ. จะกลายเป็นอีก 543 ปีข้างหน้า ถูกจัดเป็น "อนาคตไกล" (เครดิต 0)
+   ทำให้ Suggested PR สูงเกินจริง (ข้อมูลชุดปัจจุบันยังไม่มีเคสนี้ แต่
+   schParse ถูกใช้กับ ETA จาก BC โดยตรง จึงต้องกันไว้)                    */
+{
+  id: "E3-schparse-strict",
+  why: "\"2026-13-01\" กลายเป็น ม.ค. 2027 เงียบ ๆ · ปี พ.ศ. ไม่ถูกแปลง (ต่างจาก schDate)",
+  count: 1,
+  find: "function schParse(iso){ if(!iso) return null; var m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(iso); if(!m) return null; return new Date(+m[1],+m[2]-1,+m[3]); }",
+  repl: "/* [patch E3] ตรวจว่าเป็นวันที่ที่มีอยู่จริง และแปลง พ.ศ. ให้เหมือน schDate */\n" +
+        "function schParse(iso){\n" +
+        "  if(!iso) return null;\n" +
+        "  var m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(iso).trim());\n" +
+        "  if(!m) return null;\n" +
+        "  var y=+m[1],mo=+m[2],da=+m[3];\n" +
+        "  if(y>=2400&&y<=2600) y-=543;\n" +
+        "  if(mo<1||mo>12||da<1||da>31) return null;\n" +
+        "  var d=new Date(y,mo-1,da);\n" +
+        "  /* ถ้า Date เลื่อนวัน แปลว่าวันที่นั้นไม่มีอยู่จริง (31 มิ.ย. · 29 ก.พ. ปีปกติ) */\n" +
+        "  if(d.getFullYear()!==y||d.getMonth()!==mo-1||d.getDate()!==da) return null;\n" +
+        "  return d;\n" +
+        "}",
+},
+
+/* ── E4 · ETA ว่าง ทั้งที่รู้ว่าของเลยกำหนดมาแล้ว ─────────────────────
+   ooBuild ตั้ง o.eta เฉพาะใบที่ ETA ยังไม่ถึง ใบที่เลยกำหนดไม่เคยถูกบันทึก
+   7 จาก 9 รหัสที่มีของค้างจึงแสดง ETA ว่าง ซึ่งอ่านได้ว่า "ไม่รู้ว่าของจะมา
+   เมื่อไหร่" ทั้งที่ความจริงคือ "เลยกำหนดมาแล้ว" — คนละความหมายกันสิ้นเชิง
+   สำหรับคนตัดสินใจเปิด PO ใหม่                                          */
+{
+  id: "E4a-eta-overdue-track",
+  why: "ใบที่เลยกำหนดไม่เคยถูกบันทึก ETA จึงแสดงว่างเหมือนไม่มีข้อมูล",
+  count: 1,
+  find: "     }else if(-days<=PARAM.ovdDays){b=\"ovd\";o.ovd+=q;o.cr+=q*PARAM.ovdCredit;k.ovdN++;k.ovd+=q;}",
+  repl: "     }else if(-days<=PARAM.ovdDays){b=\"ovd\";o.ovd+=q;o.cr+=q*PARAM.ovdCredit;k.ovdN++;k.ovd+=q;\n" +
+        "       /* [patch E4] จำวันที่ของใบที่เลยกำหนดไว้ด้วย เพื่อไม่ให้ช่อง ETA ว่าง */\n" +
+        "       if(o.etaLate===undefined||o.etaLate===null||d<o.etaLate)o.etaLate=d;}",
+},
+{
+  id: "E4b-eta-overdue-show",
+  why: "ต้องแสดงว่า \"เลยกำหนด\" ไม่ใช่ปล่อยว่างให้เข้าใจว่าไม่มีข้อมูล",
+  count: 1,
+  find: "   r.ooEta  =(o&&o.eta)?ooISO(o.eta):\"\";",
+  repl: "   /* [patch E4] ไม่มี ETA ในอนาคต แต่มีใบที่เลยกำหนด → บอกให้ชัด */\n" +
+        "   r.ooEta  =(o&&o.eta)?ooISO(o.eta)\n" +
+        "            :((o&&o.etaLate)?(\"เลยกำหนด \"+ooISO(o.etaLate)):\"\");",
+},
+
+/* ── E5 · snapshot PO เก่ากว่าวันที่ใช้ตัดสิน ─────────────────────────
+   DATA.onorderMeta.asof = 2026-07-26 แต่ ooBuild ใช้ schToday() ตัดสินว่า
+   ใบไหน "กำลังมา / เลยกำหนด" ช่องว่างระหว่างสองวันนี้คือช่วงที่ระบบไม่รู้
+   ว่ามีการรับของเข้าแล้วหรือยัง ของที่รับแล้วจะยังถูกนับเป็น on-order อยู่
+   ทำให้ Suggested PR ต่ำกว่าที่ควร — ตัวเลขนี้ถูกเอาไปสั่งของจริง
+   จึงต้องบอกอายุของข้อมูลไว้ข้างตัวเลข ไม่ใช่ให้ไปเปิดดูเอง               */
+{
+  id: "E5-po-snapshot-age",
+  why: "snapshot PO เก่ากว่าวันที่ใช้คำนวณ ทำให้ของที่รับเข้าแล้วยังถูกนับเป็นของกำลังมา",
+  count: 1,
+  find: " var k=OO.kpi||{},m=DATA.onorderMeta||{};",
+  repl: " var k=OO.kpi||{},m=DATA.onorderMeta||{};\n" +
+        " /* [patch E5] อายุของ snapshot เทียบกับวันที่ใช้ตัดสิน */\n" +
+        " var _ageD=null;\n" +
+        " (function(){\n" +
+        "   var a=m.asof?schParse(m.asof):null; if(!a)return;\n" +
+        "   _ageD=Math.round((schToday()-a)/86400000);\n" +
+        " })();",
+},
+{
+  id: "E5b-po-snapshot-note",
+  why: "ต้องขึ้นคำเตือนอายุข้อมูลข้างตัวเลข ไม่ใช่ให้ผู้ใช้ไปเปิดดูเอง",
+  count: 1,
+  find: "\"<span class=\\\"mut\\\"><b>หักออกจาก PR แล้ว \"+nfm((k.creditRows!=null)?k.creditRows:k.credit)+\" หน่วย</b>\"+",
+  repl: "\"<span class=\\\"mut\\\"><b>หักออกจาก PR แล้ว \"+nfm((k.creditRows!=null)?k.creditRows:k.credit)+\" หน่วย</b>\"+\n" +
+        "  /* [patch E5] */\n" +
+        "  ((_ageD!=null&&_ageD>0)?\" · <b style=\\\"color:#9c4a37\\\">ข้อมูล PO เก่า \"+_ageD+\" วัน (ณ \"+m.asof+\" แต่คำนวณ ณ \"+ooISO(schToday())+\") — ของที่รับเข้าแล้วในช่วงนี้ยังถูกนับเป็นของกำลังมา ทำให้ PR ต่ำกว่าจริง</b>\":\"\")+",
+},
+
+/* ── E6 · benchmark ของ NPD ถูกคิดจากเมนูที่กำลังถูกวัดเอง ────────────
+   cohort ที่ใช้สร้าง benchmark คือ C73 · C69 · C74 · SM39 · SM38
+   ทั้ง 5 ตัวอยู่ในตาราง 9 เมนูที่ถูกวัดด้วย benchmark ตัวนั้น
+   C74 จึงได้ 100% พอดี เพราะมันเป็นส่วนหนึ่งของค่าเฉลี่ยที่ตัวเองสร้าง
+   ไม่ใช่เรื่องที่แก้เลขได้ (เมนูใหม่มีน้อย จะตัดตัวเองออกก็เหลือ 4 ตัว)
+   แต่ต้องบอกให้ผู้อ่านรู้ ไม่ใช่ปล่อยให้เข้าใจว่าเทียบกับของนอกกลุ่ม     */
+{
+  id: "E6-npd-cohort-disclosure",
+  why: "5 เมนูใน cohort ถูกวัดด้วย benchmark ที่ตัวเองสร้าง — C74 ได้ 100% พอดีเพราะเหตุนี้",
+  count: 1,
+  find: "function npdBm(){",
+  repl: "/* [patch E6] เปิดเผยว่าเมนูไหนอยู่ใน cohort ที่สร้าง benchmark เอง */\n" +
+        "function npdCohortNote(){\n" +
+        "  var m=(NPD&&NPD.d&&NPD.d.meta)||{},c=m.cohort||[];\n" +
+        "  if(!c.length)return \"\";\n" +
+        "  return \"BENCHMARK (\"+(m.bmCum||0)+\" แก้ว) คิดจาก \"+c.length+\" เมนู: \"+c.join(\" · \")+\n" +
+        "    \" — เมนูเหล่านี้อยู่ในตารางด้านล่างด้วย จึงถูกวัดด้วยค่าที่ตัวเองมีส่วนสร้าง \"+\n" +
+        "    \"(% VS BM ของเมนูในกลุ่มนี้จะเกาะ 100% โดยธรรมชาติ ไม่ได้แปลว่าทำได้ตามเป้าพอดี)\";\n" +
+        "}\n" +
+        "function npdBm(){",
+},
+{
+  id: "E6b-npd-cohort-render",
+  why: "ต้องแสดงคำอธิบาย cohort บนหน้าจริง ไม่ใช่มีแต่ฟังก์ชัน",
+  count: 1,
+  find: "function npdTable(){",
+  repl: "function npdTable(){\n" +
+        "  /* [patch E6] */\n" +
+        "  (function(){\n" +
+        "    var host=document.getElementById(\"npd\"); if(!host)return;\n" +
+        "    var id=\"npdCohortNote\",el=document.getElementById(id);\n" +
+        "    var txt=npdCohortNote(); if(!txt)return;\n" +
+        "    if(!el){ el=document.createElement(\"div\"); el.id=id;\n" +
+        "      el.className=\"mut\"; el.style.cssText=\"margin:8px 0;font-size:12px;line-height:1.6\";\n" +
+        "      var t=host.querySelector(\"table\"); if(t&&t.parentNode)t.parentNode.insertBefore(el,t); else host.appendChild(el); }\n" +
+        "    el.textContent=txt;\n" +
+        "  })();",
 }
 
 ];
