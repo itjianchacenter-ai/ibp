@@ -403,10 +403,66 @@ function runEngine(){
   buildSkuRows();
   syncExplorer();
   FC.histHit=feedHist();
+  FC.xyzN=computeMenuXyz();
   /* ป้อน HIST แล้วต้องสั่งวาด XYZ ใหม่ด้วย — เดิมเส้นทาง "ล้างข้อมูล" เรียก
      renderSeg() แต่เส้นทาง "ป้อนเข้า" ไม่เรียก ทำให้เมทริกซ์ ABC×XYZ ยังขึ้น
      "—" ทั้งตารางทั้งที่ข้อความสรุปบอกว่าป้อนประวัติเข้าไปแล้ว (R-05)        */
-  if(FC.histHit&&typeof renderSeg==="function")renderSeg();
+  if(typeof renderSeg==="function")renderSeg();
+  noteMaterialXyzGap();
+}
+
+/* ── R-05 (ส่วนที่ทำได้จริง) · XYZ ระดับเมนู จากประวัติ POS ที่เพิ่งอ่านเข้ามา ──
+   เมทริกซ์ ABC×XYZ ใน Module 3++ คิดบน DATA.stock ซึ่งเป็น "วัตถุดิบ" และไม่มี
+   อนุกรมเวลาอยู่ในระบบเลยสักชุด (มีแค่ยอด OUT งวดเดียว) computeXYZ() ต้องการ
+   ประวัติ ≥3 งวดจึงคืน "—" ครบทั้ง 616 รายการ — เป็นข้อจำกัดของข้อมูล ไม่ใช่บั๊ก
+   และปลดล็อกได้ด้วย BOM (R-03) เท่านั้น
+
+   แต่ระดับ "เมนู" เรามีประวัติจริงอยู่ในมือแล้ว — FC.series คืออนุกรมรายเดือน
+   ที่อ่านจากไฟล์ POS ของผู้ใช้ จึงคำนวณ CV และจัด X/Y/Z ได้ทันทีด้วยนิยาม
+   เดียวกับ computeXYZ() ของ Module 3++ (X ≤0.5 · Y ≤1.0 · Z >1.0)
+   ผลถูกเขียนลงแถวราย SKU เพื่อให้เห็นบนตาราง ส่งออก Excel และ Data Explorer ได้ */
+function computeMenuXyz(){
+  var bySku={},n=0;
+  Object.keys(FC.series).forEach(function(k){
+    var s=FC.series[k],c=String(s.code).trim().toUpperCase();
+    var v=s.vals.slice(s.first);
+    if(!bySku[c])bySku[c]=[];
+    for(var i=0;i<v.length;i++)bySku[c][i]=(bySku[c][i]||0)+v[i];
+  });
+  FC.skuRows.forEach(function(r){
+    var h=bySku[String(r.code).trim().toUpperCase()];
+    if(!h||h.length<3){ r.cv=null; r.xyz="—"; return; }
+    var mean=h.reduce(function(a,b){return a+b;},0)/h.length;
+    if(!(mean>0)){ r.cv=null; r.xyz="Z"; return; }
+    var sd=Math.sqrt(h.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/h.length);
+    var cv=sd/mean;
+    r.cv=Math.round(cv*100)/100;
+    r.xyz=cv<=0.5?"X":(cv<=1.0?"Y":"Z");
+    n++;
+  });
+  return n;
+}
+
+/* เมทริกซ์ ABC×XYZ ที่ขึ้น "—" ครบทุกช่องโดยไม่บอกเหตุผล ทำให้ผู้ใช้เข้าใจว่า
+   ระบบพัง ทั้งที่เป็นข้อจำกัดของข้อมูลที่เอกสารระบุไว้แล้ว — เติมคำอธิบายต่อท้าย
+   บรรทัดสรุปของโมดูล 3++ (ต่อท้ายอย่างเดียว ไม่แตะโครงสร้างเดิมของ v15)      */
+var XYZ_NOTE_MARK="jc-xyznote";
+function noteMaterialXyzGap(){
+  var el=q("segcount"); if(!el)return;
+  /* เช็คจากเนื้อหาจริง ไม่ใช่จาก attribute — renderSeg() เขียน innerHTML ใหม่ทุกครั้ง
+     แต่ attribute อยู่บนตัว element จึงค้าง ทำให้หมายเหตุถูกเติมแค่ครั้งเดียวแล้วหายตลอด */
+  if(el.innerHTML.indexOf(XYZ_NOTE_MARK)>=0)return;
+  var stock=(typeof DATA!=="undefined"&&DATA.stock)?DATA.stock:[];
+  var rated=stock.filter(function(r){return r.xyz&&r.xyz!=="—";}).length;
+  if(rated>0)return;                       /* มีข้อมูลแล้ว ไม่ต้องอธิบาย */
+  var msg=' <span class="'+XYZ_NOTE_MARK+' mut">· XYZ ของวัตถุดิบยังว่าง เพราะ DATA.stock '+
+          'มียอด OUT งวดเดียว ไม่ใช่อนุกรมเวลา (computeXYZ ต้องการ ≥3 งวด) — '+
+          'ปลดล็อกด้วย BOM (R-03) ที่แปลงพยากรณ์รายเมนูเป็นความต้องการวัตถุดิบ</span>';
+  if(FC.xyzN>0)
+    msg+=' <b class="'+XYZ_NOTE_MARK+'">· '+
+         fmt("XYZ รายเดือนระดับเมนูคำนวณจากไฟล์ POS แล้ว {n} รหัส (ดูคอลัมน์ CV/XYZ ในไฟล์ส่งออก)",
+             {n:FC.xyzN})+"</b>";
+  el.innerHTML+=msg;
 }
 
 /* ── R-05 · ป้อนประวัติรายเดือนเข้า Module 3++ (XYZ segmentation) ──────
@@ -713,7 +769,9 @@ function syncExplorer(){
    ที่อยู่ระดับโมดูล ทำให้ข้อความแปลใด ๆ ที่เพิ่มในฟังก์ชันนี้จะ throw       */
 function exportFC(kind){
   var sku=q("fcview").value==="sku";
-  var head=sku?["รหัส","เมนู","พยากรณ์","Override","Final","เดือนล่าสุด","Δ%","วิธี","WMAPE%","Bias%","Baseline v6.30","Consensus v6.30","Gap%","ธง","เหตุผล","ผู้ทบทวน"]
+  /* CV / XYZ ระดับเมนู คำนวณจากประวัติ POS ที่อ่านเข้ามา (ดู computeMenuXyz)
+     ใส่ในไฟล์ส่งออกเพื่อให้ใช้จัดนโยบายสต็อกต่อได้ ตามที่ R-05 ตั้งใจไว้    */
+  var head=sku?["รหัส","เมนู","พยากรณ์","Override","Final","เดือนล่าสุด","Δ%","วิธี","WMAPE%","Bias%","Baseline v6.30","Consensus v6.30","Gap%","CV รายเดือน","XYZ รายเดือน","ธง","เหตุผล","ผู้ทบทวน"]
               :["รหัส","เมนู","ช่องทาง","พยากรณ์","Override","Final","เดือนล่าสุด","Δ%","วิธี","WMAPE%","Bias%","ธง","เหตุผล","ผู้ทบทวน"];
   var src=sku?FC.skuRows:FC.rows;
   var body=src.map(function(r){
@@ -724,7 +782,9 @@ function exportFC(kind){
     if(!sku)a.push(r.ch);
     a=a.concat([r.fcst,(o.qty!=null?o.qty:""),fin,r.last,d,r.mlabel,
       (r.wmape==null?"":Math.round(r.wmape*1000)/10),(r.bias==null?"":Math.round(r.bias*1000)/10)]);
-    if(sku)a=a.concat([base.base==null?"":base.base,base.cons==null?"":base.cons,base.gap==null?"":Math.round(base.gap*10)/10]);
+    if(sku)a=a.concat([base.base==null?"":base.base,base.cons==null?"":base.cons,
+                       base.gap==null?"":Math.round(base.gap*10)/10,
+                       r.cv==null?"":r.cv, r.xyz||"—"]);
     a=a.concat([(r.flags||[]).join(" · "),o.reason||"",o.by||""]);
     return a;
   });
@@ -1020,6 +1080,18 @@ function demoAOA(){
     finally{ rows.forEach(function(r,i){ r.avgDaily=saved[i]; }); }
     rows.forEach(function(r){ r.dosEff=(r.dailyEff>0)?Math.round(r.end/r.dailyEff):r.dos; });
   };
+})();
+
+/* renderSeg() ของโมดูล 3++ ถูกเรียกจากหลายที่ (ขยับเกณฑ์ ABC, กรองสโคป,
+   สลับภาษา) และเขียน #segcount ใหม่ทุกครั้ง หมายเหตุอธิบายช่องว่างของ XYZ
+   จึงหายไปทุกครั้งที่ผู้ใช้ขยับอะไรก็ตาม — ห่อไว้ให้เติมกลับเสมอ           */
+(function(){
+  if(typeof renderSeg!=="function")return;
+  var G=(typeof globalThis!=="undefined")?globalThis:
+        ((typeof window!=="undefined")?window:null);
+  if(!G)return;
+  var base=renderSeg;
+  G.renderSeg=function(){ var r=base.apply(this,arguments); noteMaterialXyzGap(); return r; };
 })();
 
 /* ── PR bridge ────────────────────────────────────────────────────── */
