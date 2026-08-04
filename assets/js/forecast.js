@@ -981,6 +981,47 @@ function demoAOA(){
   return aoa;
 }
 
+/* ── รองรับ recomputePR รุ่นที่ไม่รู้จัก demand index ───────────────────
+   Control Tower v15 เขียน recomputePR() ใหม่ เพิ่มระบบของที่สั่งค้าง (on-order)
+   เข้ามา — pr = max(0, avgDaily×cover − end − ooCr) — แต่ตัดตรรกะ K /
+   PARAM.basis / PARAM.fcIndex ออกไป กดปุ่ม "ป้อนเข้า Suggested PR" จึงเปลี่ยน
+   แค่ข้อความ ตัวเลขไม่ขยับ ทำให้ AC-06 · TC-43 · TC-44 · NFR-09 พังเงียบ ๆ
+
+   แก้โดยห่อของเดิมไว้ ไม่แก้สูตรของ v15 — คูณ K เข้าที่ avgDaily ก่อนเรียก
+   ของเดิม ผลลัพธ์จึงเป็น max(0, avgDaily×K×cover − end − ooCr) ซึ่งตรงกับ
+   SRS §5.4 (dailyEff = avgDaily × K) และยังได้ระบบ on-order ของ v15 ครบ
+   คืนค่า avgDaily กลับหลังคำนวณเสร็จ เพื่อไม่ให้ฐานเดิมถูกดัดแปลงถาวร
+
+   ตรวจก่อนห่อ: ถ้า recomputePR ที่มีอยู่รู้จัก PARAM.basis แล้ว (รุ่นของ repo นี้)
+   จะไม่ห่อ เพื่อไม่ให้คูณ K ซ้ำสองรอบ                                        */
+(function(){
+  if(typeof recomputePR!=="function")return;
+  if(String(recomputePR).indexOf("PARAM.basis")>=0)return;   /* รุ่นที่รองรับอยู่แล้ว */
+  /* ต้องเขียนทับที่ "global object" จริง ๆ ไม่ใช่ที่ window เฉย ๆ —
+     ในเบราว์เซอร์ทั้งสองตัวเป็นตัวเดียวกัน แต่ในสภาพแวดล้อมทดสอบไม่ใช่
+     ถ้าอ้าง window อย่างเดียว การห่อจะไม่มีผลและบั๊กจะกลับมาโดยไม่มีใครรู้ */
+  var G=(typeof globalThis!=="undefined")?globalThis:
+        ((typeof window!=="undefined")?window:null);
+  if(!G)return;
+  var base=recomputePR;
+  G.recomputePR=function(){
+    var K=(typeof PARAM!=="undefined"&&PARAM.basis==="fc"&&PARAM.fcIndex>0)?PARAM.fcIndex:1;
+    var rows=(typeof DATA!=="undefined"&&DATA.stock)?DATA.stock:[];
+    if(K===1){
+      rows.forEach(function(r){ r.dailyEff=r.avgDaily; });
+      return base();
+    }
+    var saved=rows.map(function(r){return r.avgDaily;});
+    rows.forEach(function(r){
+      r.dailyEff=Math.round(r.avgDaily*K*100)/100;
+      r.avgDaily=r.dailyEff;
+    });
+    try{ base(); }
+    finally{ rows.forEach(function(r,i){ r.avgDaily=saved[i]; }); }
+    rows.forEach(function(r){ r.dosEff=(r.dailyEff>0)?Math.round(r.end/r.dailyEff):r.dos; });
+  };
+})();
+
 /* ── PR bridge ────────────────────────────────────────────────────── */
 function toPR(){
   var tot=0,lastTot=0;

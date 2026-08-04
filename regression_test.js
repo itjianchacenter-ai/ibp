@@ -331,6 +331,68 @@ eq("K = 1 เมื่อ fcIndex = 1 → พฤติกรรมเหมื�
    DATA.stock.map((r) => r.pr), before);
 PARAM.basis = "jun"; recomputePR();
 
+/* ══ รองรับ recomputePR รุ่นที่ไม่รู้จัก demand index (Control Tower v15) ══ */
+section("AC-06 · ต้องทำงานกับ recomputePR รุ่นที่ไม่มี PARAM.basis (v15)");
+(function () {
+  /* จำลองสภาพของ v15: recomputePR ใช้ avgDaily ตรง ๆ + หักของที่สั่งค้าง (ooCr)
+     และไม่รู้จัก PARAM.basis / PARAM.fcIndex เลย */
+  const c = vm.createContext({
+    console, Date, Math, JSON, parseInt, parseFloat, isFinite, isNaN,
+    String, Number, Object, Array, Boolean, RegExp, Error,
+    Blob: function () {}, URL: { createObjectURL: () => "", revokeObjectURL() {} },
+    setTimeout, alert: () => {}, confirm: () => true,
+    document: {
+      getElementById: el, createElement: () => el("__t"), querySelectorAll: () => [],
+      querySelector: () => null, body: { appendChild() {} },
+      documentElement: { setAttribute() {} }, addEventListener() {},
+    },
+    window: { addEventListener() {} }, localStorage: undefined, navigator: { language: "th" },
+  });
+  c.globalThis = c; c.self = c; c.window.document = c.document;
+  vm.runInContext(rd("assets/js/data.js"), c);
+  vm.runInContext(rd("assets/js/store.js"), c);
+  /* recomputePR แบบ v15 — ไม่มี PARAM.basis */
+  vm.runInContext(`
+    var PARAM={lead:14,cover:45,basis:"jun",fcIndex:1};
+    var DATASETS={}; var HIST={};
+    function csvEsc(v){return String(v==null?"":v);} function dl(){} function stamp(){return "x";}
+    function render(){} function renderSeg(){}
+    DATA.stock.forEach(function(r){ r.avgDaily=(r.out>0)?Math.round(r.out/30*100)/100:0; r.ooCr=0; });
+    function recomputePR(){
+      var C=PARAM.cover;
+      DATA.stock.forEach(function(r){
+        if(r.avgDaily>0) r.pr=Math.max(0,Math.round(r.avgDaily*C-r.end-(r.ooCr||0)));
+        else r.pr=0;
+      });
+    }
+  `, c);
+  vm.runInContext(rd("assets/js/forecast.js"), c);
+
+  const D = vm.runInContext("DATA", c);
+  const PM = vm.runInContext("PARAM", c);
+  const run = () => vm.runInContext("recomputePR()", c);
+
+  run();
+  const base = D.stock.map((r) => r.pr);
+  PM.basis = "fc"; PM.fcIndex = 1.25; run();
+  const scaled = D.stock.map((r) => r.pr);
+  ok("เปิดฐานพยากรณ์แล้ว Suggested PR เปลี่ยน (เดิม v15 ไม่ขยับเลย)",
+     JSON.stringify(base) !== JSON.stringify(scaled));
+
+  const rows = D.stock.filter((r) => r.avgDaily > 0);
+  const bad = rows.filter((r) => {
+    const de = Math.round(r.avgDaily * 1.25 * 100) / 100;
+    return r.pr !== Math.max(0, Math.round(de * PM.cover - r.end - (r.ooCr || 0)))
+        || Math.abs(de - r.dailyEff) > 1e-9;
+  });
+  eq("ทุกแถวตรงสูตร SRS §5.4 (dailyEff ปัด 2 ตำแหน่งก่อนเข้าสูตร)", bad.length, 0);
+
+  PM.basis = "jun"; PM.fcIndex = 1; run();
+  eq("ย้อนกลับแล้วตรงเป๊ะทุกแถว (NFR-09)", D.stock.map((r) => r.pr), base);
+  ok("avgDaily ฐานเดิมไม่ถูกดัดแปลงถาวร",
+     D.stock.every((r) => !r.avgDaily || Math.abs(r.avgDaily - (r.out > 0 ? Math.round(r.out / 30 * 100) / 100 : 0)) < 1e-9));
+})();
+
 /* ══ core.js · aging join ═════════════════════════════════════════════ */
 section("Data Explorer · ยอดใกล้หมดอายุต้องไม่ถูกนับซ้ำข้ามคลัง");
 const trueExp = (function () {
