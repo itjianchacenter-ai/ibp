@@ -103,6 +103,106 @@ module.exports = [
   repl: "function rowHtml(d,r){return \"<tr>\"+d.cols.map(c=>`<td class=\"l\">${schEsc(fmtCell(r[c[1]]))}</td>`).join(\"\")+\"</tr>\";}"
 },
 
+/* ══ ชุด B · ทำให้ตัวเลขตรงกับสิ่งที่การ์ดเขียนไว้เอง ═══════════════════
+   ทั้งหมดนี้ไม่ได้ตั้งนิยามใหม่ — เป็นการทำให้โค้ดทำตามคำอธิบายบนหน้าจอ
+   ของตัวเองที่ขัดกันอยู่                                                  */
+
+/* ── B1 · ยอดรวม NPD ทิ้งตัวหารไว้ว่าง ทำให้อ่านผิดทิศ ────────────────
+   เชิงอรรถของการ์ดเขียนว่า "% vs BM เทียบเฉพาะจำนวนวันที่มีข้อมูลจริง"
+   แถวทำถูก แต่แถวรวมปิดช่อง BENCHMARK/% ด้วย colspan
+   ผู้อ่านจึงหารเองด้วย benchmark เต็ม 7 วัน × 9 เมนู = 96.9% "ต่ำกว่าเกณฑ์"
+   ทั้งที่ pro-rate จริงได้ 144.3% "เกินเกณฑ์" — คนละข้อสรุปทางธุรกิจ       */
+{
+  id: "B1-npd-total-prorated",
+  why: "ยอดรวม NPD ไม่ให้ตัวหาร ทำให้อ่านได้ 96.9% ทั้งที่ pro-rate จริง 144.3%",
+  count: 1,
+  find: "    f.innerHTML='<td class=\"l\"><b>รวม</b></td><td class=\"l\">'+NPD.d.launches.length+' เมนูใหม่</td><td></td>'+\n" +
+        "      '<td colspan=\"7\" class=\"dcell\"></td><td class=\"dcell\"><b>'+npdFmt(tot)+'</b></td><td colspan=\"3\"></td>'+\n" +
+        "      '<td class=\"dcell\"><b>'+npdFmt(pj)+'</b></td>';",
+  repl: "    /* [patch B1+B2] เติม benchmark ที่ pro-rate ตามจำนวนวันที่มีข้อมูลจริง\n" +
+        "       ให้ตรงกับเชิงอรรถของการ์ด และบอกว่าคาดการณ์มาจากกี่เมนู */\n" +
+        "    var mmT=NPD.d.meta;\n" +
+        "    var bmTot=NPD.d.launches.reduce(function(a,o){\n" +
+        "      var b=0,lim=Math.min(o.avail,7); for(var i=0;i<lim;i++) b+=mmT.bmDay[i]; return a+b;},0);\n" +
+        "    var vsTot=(bmTot>0)?Math.round(tot/bmTot*100):null;\n" +
+        "    var pjN=NPD.d.launches.filter(function(o){return o.proj!==null;}).length;\n" +
+        "    f.innerHTML='<td class=\"l\"><b>รวม</b></td><td class=\"l\">'+NPD.d.launches.length+' เมนูใหม่</td><td></td>'+\n" +
+        "      '<td colspan=\"7\" class=\"dcell\"></td><td class=\"dcell\"><b>'+npdFmt(tot)+'</b></td>'+\n" +
+        "      '<td class=\"dcell\">'+npdFmt(bmTot)+'</td>'+\n" +
+        "      '<td class=\"dcell\"><b>'+(vsTot===null?'—':vsTot+'%')+'</b></td><td></td>'+\n" +
+        "      '<td class=\"dcell\"><b>'+npdFmt(pj)+'</b>'+\n" +
+        "      (pjN<NPD.d.launches.length?'<span class=\"softn\">จาก '+pjN+'/'+NPD.d.launches.length+' เมนู</span>':'')+'</td>';"
+},
+
+/* ── B3 · Benchmark สองค่าบนหน้าจอเดียวกัน ────────────────────────────
+   KPI ใช้ meta.bmCum = 666 แต่คอลัมน์ในตารางคำนวณ Σ bmDay = 667
+   แถว C74 จึงโชว์ สะสม 666 · Benchmark 667 · 100% · ชิปเขียว "ผ่านเกณฑ์"
+   ทั้งที่ 666/667 = 99.85% ซึ่งตาม legend ต้องเป็นเหลือง
+   ใช้ Σ bmDay ตัวเดียวทั้งการ์ด เพราะเป็นค่าที่ตรรกะรายแถวใช้จริง          */
+{
+  id: "B3-benchmark-single-source",
+  why: "KPI ใช้ 666 แต่ตารางใช้ 667 — แถว C74 ขัดแย้งกันเอง",
+  count: 1,
+  find: "  if(g('npdbm')) g('npdbm').textContent=Number(m.bmCum).toLocaleString('en-US');",
+  repl: "  /* [patch B3] ใช้ Σ bmDay ให้ตรงกับที่ตรรกะรายแถวใช้จริง */\n" +
+        "  if(g('npdbm')) g('npdbm').textContent=Number(\n" +
+        "    (m.bmDay&&m.bmDay.length)?m.bmDay.reduce(function(a,b){return a+b;},0):m.bmCum\n" +
+        "  ).toLocaleString('en-US');"
+},
+
+/* ── B4 · "FVA vs โมเดลเดี่ยวที่ดีสุด" ไม่ได้เทียบกับตัวที่ดีสุด ─────────
+   leaderboard บอกเองว่า DOW-Recent 16.05 ดีกว่า DOW-Sea 16.37
+   แต่ KPI อ้าง DOW-Sea → +2.46 pts ทั้งที่ควรเป็น +2.15 (เกินจริง 14%)
+   คำนวณจาก FA.lead ตอน render แทนการอ่านค่าคงที่ที่ฝังมา                  */
+{
+  id: "B4-fva-best-single",
+  why: "FVA อ้าง DOW-Sea 16.37 ทั้งที่โมเดลเดี่ยวที่ดีสุดคือ DOW-Recent 16.05",
+  count: 1,
+  find: "    ['FVA vs โมเดลเดี่ยวที่ดีสุด', faS(k.fvaBase)+' pts', 'DOW-Sea เดี่ยว = '+faP(k.base)+' — ส่วนนี้คือคุณค่าของ ensemble'],",
+  repl: "    /* [patch B4] หาโมเดลเดี่ยวที่ดีสุดจาก leaderboard จริง ไม่ใช้ค่าคงที่ */\n" +
+        "    (function(){var bs=null;(FA.lead||[]).forEach(function(d){\n" +
+        "      if(d.kind==='single'&&(bs===null||d.wmape<bs.wmape))bs=d;});\n" +
+        "      var bw=bs?bs.wmape:k.base, bn=bs?bs.name:'DOW-Sea';\n" +
+        "      return ['FVA vs โมเดลเดี่ยวที่ดีสุด', faS(Math.round((bw-k.wmape)*100)/100)+' pts',\n" +
+        "              bn+' เดี่ยว = '+faP(bw)+' — ส่วนนี้คือคุณค่าของ ensemble'];})(),"
+},
+
+/* B4b/B4c · ที่เหลืออีกสองแห่งยังพิมพ์ค่าเก่าจาก k.fvaBase — ต้องตรงกันทั้งการ์ด */
+{
+  id: "B4b-fva-ladder-footer",
+  why: "บรรทัดสรุปใต้บันไดคุณค่ายังพิมพ์ +2.46 จากค่าคงที่",
+  count: 1,
+  find: "'นโยบายแนะนำลด WMAPE ลง <b>'+faS(k.fvaNaive)+' pts</b> จาก Naive และ <b>'+faS(k.fvaBase)+' pts</b> จากโมเดลเดี่ยวที่ดีที่สุด</div>';",
+  repl: "'นโยบายแนะนำลด WMAPE ลง <b>'+faS(k.fvaNaive)+' pts</b> จาก Naive และ <b>'+\n" +
+        "    faS((function(){var bs=null;(FA.lead||[]).forEach(function(d){\n" +
+        "      if(d.kind==='single'&&(bs===null||d.wmape<bs.wmape))bs=d;});\n" +
+        "      return Math.round(((bs?bs.wmape:k.base)-k.wmape)*100)/100;})())+\n" +
+        "    ' pts</b> จากโมเดลเดี่ยวที่ดีที่สุด</div>';   /* [patch B4b] */"
+},
+{
+  id: "B4c-fva-excel-summary",
+  why: "ชีต Summary ใน Excel ยังส่งออกค่าคงที่ตัวเดิม",
+  count: 1,
+  find: "    ['FVA vs best single model',k.fvaBase,'pts'],",
+  repl: "    ['FVA vs best single model',(function(){var bs=null;(FA.lead||[]).forEach(function(d){\n" +
+        "      if(d.kind==='single'&&(bs===null||d.wmape<bs.wmape))bs=d;});\n" +
+        "      return Math.round(((bs?bs.wmape:k.base)-k.wmape)*100)/100;})(),'pts'],   /* [patch B4c] */"
+},
+
+/* ── B5 · Exception List ไม่มีทาง FAIL เพราะ BIAS ─────────────────────
+   เมื่อไม่ผ่าน PASS เพราะ bias ล้วน ๆ ด่าน WATCH ตรวจแค่ WMAPE
+   SKU ที่อยู่ในเกณฑ์ WMAPE จึงไม่มีทางถึง FAIL ไม่ว่า bias จะเบ้แค่ไหน
+   19 จาก 64 SKU ซ่อนอยู่ใน WATCH เช่น C30 bias +19.06% (เกิน ±5% ถึง 3.8 เท่า)
+   ใช้ค่าผ่อนผัน 1.35 เท่าเดียวกับที่โค้ดใช้กับ WMAPE อยู่แล้ว ไม่ตั้งเกณฑ์ใหม่ */
+{
+  id: "B5-bias-can-fail",
+  why: "BIAS ไม่มีทางทำให้ FAIL — 19/64 SKU ที่เบ้เกินเกณฑ์ซ่อนอยู่ใน WATCH",
+  count: 1,
+  find: "  if(r.wmape<=lim*1.35) return {k:'WATCH',c:'w'};",
+  repl: "  /* [patch B5] ผ่อนผัน bias ด้วยตัวคูณ 1.35 เท่ากับที่ใช้กับ WMAPE */\n" +
+        "  if(r.wmape<=lim*1.35 && Math.abs(r.bias)<=t.tbias*1.35) return {k:'WATCH',c:'w'};"
+},
+
 /* ── P3 · export ของ NPD Schedule ไม่ตรงกับ importer ของตัวเอง ─────────
    export 12 คอลัมน์ (แทรก D-x · ความพร้อม% · ด่านที่ยังไม่ผ่าน ซึ่งเป็นค่า
    คำนวณ) แต่ importer อ่าน 9 คอลัมน์ตามเทมเพลต ทุกช่องตั้งแต่ตัวที่ 5 จึงเลื่อน
