@@ -225,8 +225,13 @@ module.exports = [
   why: "BIAS ไม่มีทางทำให้ FAIL — 19/64 SKU ที่เบ้เกินเกณฑ์ซ่อนอยู่ใน WATCH",
   count: 1,
   find: "  if(r.wmape<=lim*1.35) return {k:'WATCH',c:'w'};",
-  repl: "  /* [patch B5] ผ่อนผัน bias ด้วยตัวคูณ 1.35 เท่ากับที่ใช้กับ WMAPE */\n" +
-        "  if(r.wmape<=lim*1.35 && Math.abs(r.bias)<=t.tbias*1.35) return {k:'WATCH',c:'w'};"
+  repl: "  /* [patch B5] ผ่อนผัน bias ด้วยตัวคูณ 1.35 เท่ากับที่ใช้กับ WMAPE\n" +
+        "     และติดป้ายว่าสถานะมาจากเกณฑ์ไหน (W=WMAPE · B=BIAS) เพื่อให้ผู้ตรวจ\n" +
+        "     เห็นเหตุผลและตัดสินเองได้ว่าตัวคูณเหมาะสมหรือไม่ ไม่ต้องเดา */\n" +
+        "  var _wOK=r.wmape<=lim*1.35, _bOK=Math.abs(r.bias)<=t.tbias*1.35;\n" +
+        "  var _why=(!_wOK?'W':'')+(!_bOK?'B':'');\n" +
+        "  if(_wOK && _bOK) return {k:'WATCH'+(Math.abs(r.bias)>t.tbias?' ·B':''),c:'w'};\n" +
+        "  return {k:'FAIL'+(_why?' ·'+_why:''),c:'r'};"
 },
 
 /* ── P3 · export ของ NPD Schedule ไม่ตรงกับ importer ของตัวเอง ─────────
@@ -255,6 +260,180 @@ module.exports = [
         "            dx===null?'':(o.st==='live'?'D+'+Math.abs(dx):(dx<0?'เลยมา '+Math.abs(dx)+' วัน':'D-'+dx)),\n" +
         "            schRdPct(o.rd),schMiss(o)]);\n" +
         "  });"
+}
+,
+
+/* ══ ชุด C · MEDIUM/LOW จากรีวิว — บั๊กชัด ไม่เปลี่ยนนิยามตัวเลข ══════ */
+
+/* C1 · npdInit ไม่มีตัวกัน — payload NPD ที่ผิดรูปทำให้ 3 โมดูลที่ไม่เกี่ยวตายตาม
+   execInit/jcBadge ถูกห่อไว้แล้ว แต่ npdInit ไม่ ทั้งที่อ่านจาก live.json เหมือนกัน
+   ถ้า throw จะทำให้ faInit (Forecast Accuracy), jcsInit, initDataset (Data Explorer)
+   ไม่ถูกเรียกเลย */
+{
+  id: "C1-npdinit-guard",
+  why: "payload NPD ผิดรูปทำให้ faInit/jcsInit/initDataset ไม่ทำงานตามไปด้วย",
+  count: 1,
+  find: " m2Init();\n schInit();\n npdInit();\n faInit();",
+  repl: " /* [patch C1] ห่อทุก init ไม่ให้โมดูลเดียวล้มแล้วลากตัวอื่นไปด้วย */\n" +
+        " try{m2Init()}catch(e){console.error(\"m2Init\",e)}\n" +
+        " try{schInit()}catch(e){console.error(\"schInit\",e)}\n" +
+        " try{npdInit()}catch(e){console.error(\"npdInit\",e)}\n" +
+        " try{faInit()}catch(e){console.error(\"faInit\",e)}"
+},
+
+/* C2 · schDate รับวันที่ที่เป็นไปไม่ได้ แล้วเก็บดิบ
+   2026-06-31 ถูกเก็บทั้งอย่างนั้น ตารางแสดง "1 ก.ค." นับเข้า KPI และ D-x
+   แต่หายจากปฏิทินเพราะปฏิทินคีย์ด้วยวันที่ที่ normalize แล้ว
+   และปี พ.ศ. แบบ ISO (2569-06-29) ไม่ถูกแปลง ทำให้ D-x ติดลบเป็นแสนวัน */
+{
+  id: "C2-schdate-validate",
+  why: "วันที่ที่เป็นไปไม่ได้ถูกเก็บดิบ หายจากปฏิทินแต่ยังนับใน KPI · ปี พ.ศ. แบบ ISO ไม่ถูกแปลง",
+  count: 1,
+  find: "  var m=/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/.exec(v);\n" +
+        "  if(m) return m[1]+'-'+String(+m[2]).padStart(2,'0')+'-'+String(+m[3]).padStart(2,'0');\n" +
+        "  m=/^(\\d{1,2})[\\/\\.](\\d{1,2})[\\/\\.](\\d{4})$/.exec(v);\n" +
+        "  if(m){ var y=+m[3]; if(y>2400) y-=543; return y+'-'+String(+m[2]).padStart(2,'0')+'-'+String(+m[1]).padStart(2,'0'); }\n" +
+        "  return '';",
+  repl: "  /* [patch C2] ตรวจว่าวันที่มีอยู่จริงในปฏิทิน และแปลงปี พ.ศ. ให้ครบทุกรูปแบบ */\n" +
+        "  var mk=function(y,mo,d){\n" +
+        "    if(y>2400)y-=543;\n" +
+        "    if(!(mo>=1&&mo<=12)||!(d>=1))return '';\n" +
+        "    if(d>new Date(y,mo,0).getDate())return '';\n" +
+        "    return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');\n" +
+        "  };\n" +
+        "  var m=/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/.exec(v);\n" +
+        "  if(m) return mk(+m[1],+m[2],+m[3]);\n" +
+        "  m=/^(\\d{1,2})[\\/\\.](\\d{1,2})[\\/\\.](\\d{4})$/.exec(v);\n" +
+        "  if(m) return mk(+m[3],+m[2],+m[1]);\n" +
+        "  return '';"
+},
+
+/* C3 · schImport ตัดคอมมาโดยไม่สนอัญประกาศ ทั้งที่ตัว export ของมันเองใส่ให้
+   ชื่อเมนูหรือรายการด่านที่มีคอมมาจะทำให้คอลัมน์เลื่อนทั้งแถว */
+{
+  id: "C3-schimport-csv-quotes",
+  why: "importer ตัดคอมมาโดยไม่สนอัญประกาศ ทั้งที่ exporter ของตัวเองใส่ให้",
+  count: 1,
+  find: "    var p=(l.indexOf(TAB)>=0?l.split(TAB):l.split(','));",
+  repl: "    /* [patch C3] เคารพอัญประกาศแบบ CSV มาตรฐาน */\n" +
+        "    var p;\n" +
+        "    if(l.indexOf(TAB)>=0){p=l.split(TAB);}\n" +
+        "    else{p=[];var cur='',inq=false;\n" +
+        "      for(var ci=0;ci<l.length;ci++){var ch=l.charAt(ci);\n" +
+        "        if(inq){ if(ch==='\"'){ if(l.charAt(ci+1)==='\"'){cur+='\"';ci++;} else inq=false; } else cur+=ch; }\n" +
+        "        else if(ch==='\"')inq=true;\n" +
+        "        else if(ch===','){p.push(cur);cur='';}\n" +
+        "        else cur+=ch;}\n" +
+        "      p.push(cur);}"
+},
+
+/* C4 · เป้า 7 วันแรก = 0 เป็นค่าที่ตั้งได้จริง (ช่องกรอกเป็น number min=0)
+   แต่ 0 เป็น falsy จึงถูกแทนด้วย benchmark 666 เงียบ ๆ
+   ส่วนค่าติดลบกลับผ่านได้เพราะ truthy */
+{
+  id: "C4-sched-target-zero",
+  why: "เป้า 0 ถูกแทนด้วย 666 เงียบ ๆ ส่วนค่าติดลบกลับผ่านได้",
+  count: 1,
+  find: "                  tgt:schNum(a[5])||schBm(),",
+  repl: "                  tgt:(function(x){return (isFinite(x)&&x>=0)?x:schBm();})(schNum(a[5])),   /* [patch C4] */"
+},
+
+/* C5 · NaN แพร่จากแถวที่ไม่มี end
+   r.pos ป้องกันด้วย (r.end||0) แล้ว แต่ prGross/pr ไม่ได้ป้องกัน
+   ผลคือแถวนั้นหลุดจากรายการ PR เงียบ ๆ และแถว TOTAL ของ Data Explorer เป็น NaN */
+{
+  id: "C5-nan-guard-end",
+  why: "แถวที่ไม่มี end ทำให้ pr เป็น NaN หลุดจากรายการ PR และ TOTAL กลายเป็น NaN",
+  count: 1,
+  find: "     r.prGross=Math.max(0,Math.round(r.avgDaily*C-r.end));",
+  repl: "     var endN=(+r.end||0);   /* [patch C5] */\n" +
+        "     r.prGross=Math.max(0,Math.round(r.avgDaily*C-endN));"
+},
+{
+  id: "C5b-nan-guard-pr",
+  why: "เช่นเดียวกับ C5 สำหรับ r.pr",
+  count: 1,
+  find: "     r.pr=Math.max(0,Math.round(r.avgDaily*C-r.end-r.ooCr));",
+  repl: "     r.pr=Math.max(0,Math.round(r.avgDaily*C-endN-(+r.ooCr||0)));   /* [patch C5b] */"
+},
+
+/* C6 · xsAggDaily ฮาร์ดโค้ด 31 วัน
+   เดือนที่มี 30 วัน (ก.ย. เม.ย. มิ.ย. พ.ย.) และ ก.พ. จะทำให้ทุกแถวตกเงื่อนไข
+   a.length<N -> n=0 -> mx=0 -> top=0 -> หารศูนย์ -> path เป็น NaN
+   กราฟและ sparkline หายทั้งอันโดยไม่มี error  (ก.ย. 2026 ใกล้ถึงแล้ว) */
+{
+  id: "C6-daily-profile-length",
+  why: "ฮาร์ดโค้ด 31 วัน — เดือน 30 วันจะทำให้กราฟรายวันหายทั้งอันโดยไม่มี error",
+  count: 1,
+  find: "  var N=31,agg=[],i,k,n=0;for(i=0;i<N;i++)agg.push(0);",
+  repl: "  /* [patch C6] ใช้ความยาวโปรไฟล์ที่พบจริง ไม่ฮาร์ดโค้ด 31 */\n" +
+        "  var N=31,agg=[],i,k,n=0;\n" +
+        "  (function(){var best=0,cnt={};(((DATA.plan||{}).rows)||[]).forEach(function(r){\n" +
+        "    var d=r&&r.d; if(!d)return; var L=String(d).split(',').length; cnt[L]=(cnt[L]||0)+1;});\n" +
+        "    Object.keys(cnt).forEach(function(L){ if(cnt[L]>best){best=cnt[L];N=+L;} });\n" +
+        "    if(!(N>0))N=31;})();\n" +
+        "  for(i=0;i<N;i++)agg.push(0);"
+},
+
+/* C7 · execInit กลืน error ทุกตัวเงียบ ๆ
+   บรรทัดล่างสุดของ init ใช้ console.error แต่ในนี้ catch ว่างหมด
+   ถ้า DATA.fa เปลี่ยนรูป กราฟและตารางหายไปพร้อมกันโดยไม่มีร่องรอย */
+{
+  id: "C7-execinit-log",
+  why: "execInit กลืน error เงียบ กราฟหายโดยไม่มีร่องรอยให้ไล่ (9 จุดทั้งไฟล์)",
+  count: 9,
+  all: true,
+  find: "}catch(e){}",
+  repl: "}catch(e){if(typeof console!=='undefined'&&console.error)console.error('v15',e)}"
+},
+
+/* C8 · nfm(NaN) คืน "0" อย่างมั่นใจ
+   ทำให้ค่าที่คำนวณไม่ได้ดูเหมือนศูนย์จริง ซึ่งอ่านผิดกว่าการแสดง — */
+{
+  id: "C8-nfm-nan",
+  why: "nfm(NaN) แสดง \"0\" ทำให้ค่าที่คำนวณไม่ได้ดูเหมือนศูนย์จริง",
+  count: 1,
+  find: "function nfm(n){return (Math.round(n)||0).toLocaleString(\"en-US\");}",
+  repl: "function nfm(n){var v=Math.round(n);return isFinite(v)?v.toLocaleString(\"en-US\"):\"—\";}   /* [patch C8] */"
+},
+
+/* C9 · top/bottom movers ซ้ำกันเมื่อจำนวนสาขาเทียบได้น้อย
+   comp.slice(0,half) กับ comp.slice(-half) ทับกันเมื่อ comp.length < half*2
+   สาขาเดียวกันจึงโผล่ทั้งตาราง "โตดีที่สุด" และ "ต้องเข้าไปดู" พร้อมกัน */
+{
+  id: "C9-lfl-movers-overlap",
+  why: "สาขาเดียวกันโผล่ทั้งตารางโตดีที่สุดและตารางต้องเข้าไปดู เมื่อสาขาเทียบได้น้อย",
+  count: 1,
+  find: " var top=comp.slice(0,half),bot=comp.slice(-half).reverse();",
+  repl: " var top=comp.slice(0,half),bot=comp.slice(Math.max(half,comp.length-half)).reverse();   /* [patch C9] */"
+},
+
+/* C10 · cut.setMonth ล้นวัน ทำให้เส้นแบ่ง "สาขาเดิม" เลื่อนได้ถึง 3 วัน
+   pStart 2026-03-31 ลบ 13 เดือน ได้ 2025-03-03 แทนที่จะเป็น 2025-02-28
+   สาขาที่เปิดในช่วงที่เลื่อนถูกย้ายจากฐาน LFL ไปเป็นสาขาใหม่ */
+{
+  id: "C10-lfl-cutoff-overflow",
+  why: "setMonth ล้นวันทำให้เส้นแบ่งสาขาเดิมเลื่อนได้ถึง 3 วัน",
+  count: 1,
+  find: " cut.setMonth(cut.getMonth()-minM);",
+  repl: " /* [patch C10] ตรึงวันที่ 1 ก่อนถอยเดือน แล้วค่อยคืนวัน กันวันล้นข้ามเดือน */\n" +
+        " (function(){var d0=cut.getDate();cut.setDate(1);cut.setMonth(cut.getMonth()-minM);\n" +
+        "  cut.setDate(Math.min(d0,new Date(cut.getFullYear(),cut.getMonth()+1,0).getDate()));})();"
+},
+
+/* C11 · zFromCSL คืน 3.5 เมื่อ CSL >= 100 และ 0 เมื่อ <= 0
+   ช่องกรอกเป็น number ที่เบราว์เซอร์ไม่ clamp ตอนพิมพ์ พิมพ์ 100 จึงได้ z=3.5
+   (≈99.98%) และพิมพ์ 0 ทำให้ safety stock ทั้งพอร์ตเป็นศูนย์โดยไม่เตือน
+   บีบให้อยู่ในช่วงที่ใช้งานได้จริงแทนการคืนค่าสุดขั้วเงียบ ๆ */
+{
+  id: "C11-zfromcsl-clamp",
+  why: "พิมพ์ CSL 100 ได้ z=3.5 · พิมพ์ 0 ทำให้ safety stock ทั้งพอร์ตเป็นศูนย์เงียบ ๆ",
+  count: 1,
+  find: "function zFromCSL(p){",
+  repl: "function zFromCSL(p){\n" +
+        "  /* [patch C11] บีบให้อยู่ในช่วงที่คำนวณได้จริง 50%–99.9% */\n" +
+        "  if(!isFinite(p))p=0.95;\n" +
+        "  if(p>0.999)p=0.999; else if(p<0.5)p=0.5;"
 }
 
 ];
