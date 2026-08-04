@@ -434,6 +434,148 @@ module.exports = [
         "  /* [patch C11] บีบให้อยู่ในช่วงที่คำนวณได้จริง 50%–99.9% */\n" +
         "  if(!isFinite(p))p=0.95;\n" +
         "  if(p>0.999)p=0.999; else if(p<0.5)p=0.5;"
+},
+
+/* ── D1 · "616 SKU" ไม่ใช่ 616 SKU ────────────────────────────────────
+   DATA.stock มี 616 "แถว" แต่มีเพียง 566 รหัสไม่ซ้ำ — 50 รหัสถูกเก็บสอง
+   คลัง (Bangkaew + CTI) จึงมีสองแถว ทุกที่ที่เขียน "616 SKU" นับแถวไม่ใช่
+   นับ SKU ทำให้ตัวหารของ coverage ทุกตัวเฟ้อ เช่น Safety Stock ที่บอกว่า
+   "149 จาก 616 SKU" จริง ๆ คือ 149 จาก 566                              */
+{
+  id: "D1a-sku-count-ss",
+  why: "\"149 จาก 616 SKU\" — 616 คือจำนวนแถว ไม่ใช่จำนวน SKU (จริง 566)",
+  count: 1,
+  find: '"+nfm(calc.length)+" SKU ที่คำนวณได้ · จาก "+nfm(all.length)+" SKU ทั้งคลัง</div></div>"',
+  repl: '"+nfm(uniqCodes(calc))+" SKU ที่คำนวณได้ · จาก "+nfm(uniqCodes(all))+" SKU ทั้งคลัง ("+nfm(all.length)+" แถว · บางรหัสอยู่ 2 คลัง)</div></div>"',
+},
+{
+  id: "D1b-sku-count-scope",
+  why: "ป้ายขอบเขตของ ABC/XYZ ก็นับแถวเป็น SKU เช่นกัน",
+  count: 1,
+  find: "· <b>${rows.length}</b> SKU ·",
+  repl: "· <b>${uniqCodes(rows)}</b> SKU (${rows.length} แถว) ·",
+},
+{
+  id: "D1c-uniq-helper",
+  why: "ตัวช่วยนับรหัสไม่ซ้ำ — วางไว้ก่อน ooBuild ที่เป็นฟังก์ชันแรกที่ใช้ DATA.stock",
+  count: 1,
+  find: "function ooBuild(){",
+  repl: "/* [patch D1] นับ \"รหัสไม่ซ้ำ\" ไม่ใช่นับแถว — วัตถุดิบเดียวกันที่เก็บ\n" +
+        "   สองคลังมีสองแถว การนับแถวทำให้ตัวหารของ coverage เฟ้อ */\n" +
+        "function uniqCodes(rows){\n" +
+        "  var seen={},n=0;\n" +
+        "  (rows||[]).forEach(function(r){\n" +
+        "    if(!r)return;\n" +
+        "    /* รับได้ทั้งแถวสต็อกตรง ๆ และ object ที่ห่อแถวไว้ใน .r (เช่นผล ssCalc) */\n" +
+        "    var raw=(r.code==null&&r.r)?r.r.code:r.code;\n" +
+        "    var c=String(raw==null?\"\":raw).trim();\n" +
+        "    if(c&&!seen[c]){seen[c]=1;n++;}\n" +
+        "  });\n" +
+        "  return n;\n" +
+        "}\n" +
+        "function ooBuild(){",
+},
+{
+  id: "D1d-sku-tiles-html",
+  why: "การ์ดในหน้าเขียน 616 SKU ไว้ตายตัว",
+  count: 1,
+  find: "Inventory Value<br>616 SKU · ทุกคลัง",
+  repl: "Inventory Value<br>566 SKU · 616 แถว · ทุกคลัง",
+},
+{
+  id: "D1e-sku-sub-html",
+  why: "การ์ด Ending Balance ก็เขียน 616 SKU ไว้ตายตัว",
+  count: 1,
+  find: "▼1,739 (−1.7%)</span> · 616 SKU",
+  repl: "▼1,739 (−1.7%)</span> · 566 SKU · 616 แถว",
+},
+
+/* ── D2 · เกณฑ์ความแม่นยำที่พิมพ์ 0 จะเด้งกลับเป็นค่าตั้งต้นเงียบ ๆ ─────
+   faT() ใช้ +value||15 — 0 เป็น falsy จึงกลายเป็น 15 ทันที ผู้ตรวจที่ตั้งใจ
+   ตั้งเกณฑ์เข้มสุด (0%) จะได้ 15% โดยไม่มีอะไรบอก และค่าติดลบกลับผ่านได้
+   ทั้งที่ไม่มีความหมาย — บั๊กชนิดเดียวกับ C4 (เป้า 0) และ C11 (CSL 0)      */
+{
+  id: "D2-fat-zero",
+  why: "พิมพ์เกณฑ์ 0% ได้ 15% เงียบ ๆ · ค่าติดลบกลับผ่าน",
+  count: 1,
+  find: "function faT(){ return {ta:+$('faTa').value||15, tb:+$('faTb').value||25, tc:+$('faTc').value||40,\n" +
+        "  tbias:+$('faTbias').value||5}; }",
+  repl: "/* [patch D2] 0 เป็นค่าที่ตั้งได้จริง (เข้มสุด) ห้ามตกไปใช้ค่าตั้งต้น\n" +
+        "   ส่วนค่าติดลบ/ว่าง/ไม่ใช่ตัวเลข จึงจะใช้ค่าตั้งต้น */\n" +
+        "function faNum(id,dflt){\n" +
+        "  var e=$(id),v=e?String(e.value).trim():\"\";\n" +
+        "  if(v===\"\")return dflt;\n" +
+        "  var n=+v;\n" +
+        "  return (isFinite(n)&&n>=0)?n:dflt;\n" +
+        "}\n" +
+        "function faT(){ return {ta:faNum('faTa',15), tb:faNum('faTb',25),\n" +
+        "                       tc:faNum('faTc',40), tbias:faNum('faTbias',5)}; }",
+},
+
+/* ── D3 · แชมป์ของกราฟ Origin ถูกเขียนชื่อไว้ตายตัว ───────────────────
+   var champ="XYZ-Gated Ensemble" — ตอนนี้บังเอิญตรงกับตัวที่ดีที่สุดจริง
+   (เฉลี่ย 13.94 vs Ensemble-2 15.18) แต่ถ้าข้อมูลเปลี่ยนแล้วรุ่นอื่นชนะ
+   กราฟจะยังชี้ตัวเดิม บั๊กชนิดเดียวกับ B4 (FVA อ้าง DOW-Sea ทั้งที่
+   DOW-Recent ดีกว่า) ที่แก้ไปแล้ว — ให้เลือกจากตัวเลข ไม่ใช่จากชื่อ      */
+{
+  id: "D3-xcorg-champion",
+  why: "แชมป์กราฟ Origin ฮาร์ดโค้ดชื่อไว้ ไม่ได้เลือกจากค่าที่วัดได้",
+  count: 1,
+  find: "  var champ=\"XYZ-Gated Ensemble\";if(names.indexOf(champ)<0)champ=names[names.length-1];",
+  repl: "  /* [patch D3] เลือกแชมป์จาก WMAPE เฉลี่ยที่ต่ำสุดจริง ไม่ใช่ชื่อที่เขียนไว้ */\n" +
+        "  var champ=null,cbest=Infinity;\n" +
+        "  names.forEach(function(nm){\n" +
+        "    var s=bo[nm];if(!s||!s.length)return;\n" +
+        "    var t=0,c=0;\n" +
+        "    s.forEach(function(v){ if(isFinite(v)){t+=v;c++;} });\n" +
+        "    if(!c)return;\n" +
+        "    var avg=t/c;\n" +
+        "    if(avg<cbest-1e-9){cbest=avg;champ=nm;}\n" +
+        "  });\n" +
+        "  if(champ===null)champ=names[names.length-1];",
+},
+
+/* ── D4 · KPI on-order เฟ้อ 19% จากรหัสที่ไม่มีในคลัง ─────────────────
+   k.credit บวกจาก idx ทุกรหัส แต่ 209 จาก 413 รหัสใน PO ไม่มีแถวใน
+   DATA.stock เลย เครดิตส่วนนั้น (737 หน่วย) จึงไม่เคยไปหักลบ PR ของแถวไหน
+   KPI บอก "หักออกจาก PR แล้ว 3,820 หน่วย" ทั้งที่ของจริงหักได้ 3,084
+   และ 209 รหัสนั้นหายเงียบ ไม่มีที่ไหนบอกว่ามีอยู่                        */
+{
+  id: "D4-orphan-po-credit",
+  why: "KPI อ้างว่าหัก PR 3,820 หน่วย แต่หักได้จริง 3,084 · 209 รหัส PO ไม่มีในคลังและหายเงียบ",
+  count: 1,
+  find: " Object.keys(idx).forEach(function(c){k.credit+=idx[c].cr;});",
+  repl: " /* [patch D4] แยกเครดิตที่ \"หักได้จริง\" ออกจากเครดิตของรหัสที่ไม่มีแถว\n" +
+        "    ในคลัง — รหัสกำพร้าไม่มีแถวให้หัก จึงต้องไม่ถูกนับรวมใน KPI */\n" +
+        " var inStock={};\n" +
+        " (DATA.stock||[]).forEach(function(r){\n" +
+        "   var sc=String(r.code==null?\"\":r.code).trim(); if(sc)inStock[sc]=1;\n" +
+        " });\n" +
+        " k.orphanN=0; k.orphanCr=0;\n" +
+        " Object.keys(idx).forEach(function(c){\n" +
+        "   if(inStock[c]){ k.credit+=idx[c].cr; }\n" +
+        "   else { k.orphanN++; k.orphanCr+=idx[c].cr; }\n" +
+        " });\n" +
+        " k.credit=Math.round(k.credit);",
+},
+{
+  id: "D4c-credit-match-rows",
+  why: "KPI ปัดเศษก่อนแบ่งคลัง ได้ 3,083 แต่ผลรวมที่หักบนแถวจริงคือ 3,084",
+  count: 1,
+  find: "   r.pos=(r.end||0)+r.ooCr;",
+  repl: "   /* [patch D4] KPI ต้องเท่ากับผลรวมที่หักบนแถวจริงหลังปัดเศษ ไม่ใช่ค่าก่อนแบ่งคลัง */\n" +
+        "   OO.kpi.creditRows=(OO.kpi.creditRows||0)+r.ooCr;\n" +
+        "   r.pos=(r.end||0)+r.ooCr;",
+},
+{
+  id: "D4b-orphan-po-note",
+  why: "ต้องบอกผู้ใช้ว่ามีรหัส PO ที่ไม่มีในคลัง ไม่ใช่เงียบ",
+  count: 1,
+  find: "\"<span class=\\\"mut\\\"><b>หักออกจาก PR แล้ว \"+nfm(k.credit)+\" หน่วย</b> = ETA ในหน้าต่างป้องกัน (\"+PARAM.lead+\"+\"+PARAM.cover+\" วัน) \"+nfm(k.inw)+\" นับ 100% \"+",
+  repl: "\"<span class=\\\"mut\\\"><b>หักออกจาก PR แล้ว \"+nfm((k.creditRows!=null)?k.creditRows:k.credit)+\" หน่วย</b>\"+\n" +
+        "  /* [patch D4] */\n" +
+        "  ((k.orphanN>0)?\" · <b style=\\\"color:#9c4a37\\\">อีก \"+nfm(Math.round(k.orphanCr))+\" หน่วยจาก \"+nfm(k.orphanN)+\" รหัส PO ที่ไม่มีในคลัง — หักกับแถวไหนไม่ได้ ต้องสอบทานรหัสที่ BC</b>\":\"\")+\n" +
+        "  \" = ETA ในหน้าต่างป้องกัน (\"+PARAM.lead+\"+\"+PARAM.cover+\" วัน) \"+nfm(k.inw)+\" นับ 100% \"+",
 }
 
 ];
