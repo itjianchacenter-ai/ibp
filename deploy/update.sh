@@ -68,3 +68,43 @@ find "$WEB" -type f -exec chmod 644 {} \;
 
 echo "✓ เสร็จ — $(du -sh "$WEB" | cut -f1) ที่ $WEB"
 echo "  หมายเหตุ: docs/ build.js server.js README.md ไม่ถูกคัดลอกขึ้น web root โดยตั้งใจ"
+
+# ── พิสูจน์ว่า cache ค้างไม่ได้ ────────────────────────────────────────
+# Cloudflare ตั้ง Browser Cache TTL ทับ Cache-Control ของต้นทาง (JS ได้
+# max-age=14400) เราแก้ที่ dashboard ไม่ได้ จึงต้องพึ่งการออกแบบแทน:
+#   1. index.html ต้องไม่ถูก cache เลย  → เบราว์เซอร์เห็น URL ใหม่เสมอ
+#   2. URL ของ asset ต้องมี ?v=<hash ของเนื้อไฟล์>  → เนื้อเปลี่ยน = URL เปลี่ยน
+# ถ้าสองข้อนี้จริง max-age 4 ชม. ไม่มีผล เพราะ URL เก่าไม่ถูกอ้างอีกแล้ว
+# ต่อไปนี้คือการ "ตรวจ" ไม่ใช่ "เชื่อ" — ยิงผ่าน Cloudflare จริงหลัง deploy
+echo "→ ตรวจว่า cache ค้างไม่ได้ (ยิงผ่าน Cloudflare จริง)"
+SITE="${SITE_URL:-https://forecast.scm-backoffice.com}"
+CACHE_FAIL=0
+
+HDR="$(curl -sI -m 25 "$SITE/" || true)"
+if printf '%s' "$HDR" | grep -qiE '^cache-control:.*(no-cache|no-store|max-age=0)'; then
+  echo "  ✓ index.html ไม่ถูก cache ($(printf '%s' "$HDR" | grep -i '^cache-control:' | tr -d '\r'))"
+else
+  echo "  ✗ index.html ถูก cache — ผู้ใช้จะค้างอยู่กับ URL ชุดเก่า"
+  printf '%s' "$HDR" | grep -iE '^(cache-control|cf-cache-status|age):' || true
+  CACHE_FAIL=1
+fi
+
+REFS="$(curl -s -m 25 "$SITE/" | grep -o 'js/[0-9]*\.js?v=[a-f0-9]*' | sort -u)"
+[ -n "$REFS" ] || { echo "  ✗ หน้าไม่ได้อ้างไฟล์ js ที่ประทับเวอร์ชันเลย"; CACHE_FAIL=1; }
+for ref in $REFS; do
+  want="${ref##*v=}"
+  got="$(curl -s -m 30 "$SITE/$ref" | sha256sum | cut -c1-8)"
+  if [ "$want" = "$got" ]; then
+    echo "  ✓ $ref  เนื้อไฟล์ตรงกับ hash ที่ประทับ"
+  else
+    echo "  ✗ $ref  ประทับ $want แต่เนื้อไฟล์จริง $got — CF เสิร์ฟของเก่า"
+    CACHE_FAIL=1
+  fi
+done
+
+if [ "$CACHE_FAIL" -ne 0 ]; then
+  echo "✗ ด่าน cache ไม่ผ่าน — ผู้ใช้อาจได้ของเก่าหลัง deploy"
+  echo "  ทางแก้: ตั้ง Browser Cache TTL = Respect Existing Headers ที่ Cloudflare"
+  exit 1
+fi
+echo "  cache ปลอดภัย: HTML สดเสมอ + URL ผูกกับ hash ของเนื้อไฟล์"

@@ -802,6 +802,60 @@ module.exports = [
         "  bridge(\"click\"); bridge(\"change\");\n" +
         "})();\n" +
         "</script>\n</body>",
+},
+
+/* ── G1 · ตัวคูณ 1.35 ที่ตัดสินว่า WATCH หรือ FAIL เป็นเลขลับในโค้ด ────
+   เกณฑ์ A/B/C และ BIAS ทีม IBP ตั้งเองได้หมด แต่ "แถบเฝ้าระวัง" ที่คูณ
+   เกณฑ์ก่อนตัดสินว่า WATCH หรือ FAIL กลับถูกเขียนตายไว้ที่ 1.35
+   ผลคือเส้นแบ่งที่กระทบ 24 SKU (WATCH 7 · FAIL 42) ไม่มีใครตรวจสอบได้
+   และเปลี่ยนไม่ได้โดยไม่แก้โค้ด
+
+   ผมไม่ตัดสินแทนว่าควรเป็นเท่าไร — นั่นเป็นนโยบายของทีม แต่เปลี่ยนจาก
+   "เลขที่ซ่อนอยู่" เป็น "ค่าที่ตั้งได้และเห็นอยู่บนหน้า" ค่าเริ่มต้นคง 1.35
+   ไว้เท่าเดิม ตัวเลขวันนี้จึงไม่ขยับ ตั้ง 1.0 = ไม่มีแถบเฝ้าระวัง
+   ผ่านคือผ่าน ไม่ผ่านคือ FAIL                                          */
+{
+  id: "G1-watchband-input",
+  why: "ตัวคูณ 1.35 ที่ตัดสิน WATCH/FAIL ถูกเขียนตายในโค้ด ตรวจสอบและปรับไม่ได้",
+  count: 1,
+  find: "      <label>เกณฑ์ BIAS &plusmn;(%)<input type=\"number\" id=\"faTbias\" value=\"5\" min=\"1\" max=\"100\" step=\"1\"></label>",
+  repl: "      <label>เกณฑ์ BIAS &plusmn;(%)<input type=\"number\" id=\"faTbias\" value=\"5\" min=\"1\" max=\"100\" step=\"1\"></label>\n" +
+        "      <!-- [patch G1] แถบเฝ้าระวัง: เกินเกณฑ์แต่ไม่เกินเกณฑ์xตัวนี้ = WATCH -->\n" +
+        "      <label title=\"เกินเกณฑ์แต่ยังไม่เกิน เกณฑ์ x ตัวนี้ = WATCH · เกินกว่านั้น = FAIL · ตั้ง 1.0 = ไม่มีแถบเฝ้าระวัง\">" +
+        "แถบเฝ้าระวัง (&times;)<input type=\"number\" id=\"faTwatch\" value=\"1.35\" min=\"1\" max=\"3\" step=\"0.05\"></label>",
+},
+{
+  id: "G2-watchband-read",
+  why: "อ่านค่าแถบเฝ้าระวังจากช่องที่ผู้ใช้ตั้ง",
+  count: 1,
+  find: "                       tc:faNum('faTc',40), tbias:faNum('faTbias',5)}; }",
+  repl: "                       tc:faNum('faTc',40), tbias:faNum('faTbias',5),\n" +
+        "                       /* [patch G2] ต่ำกว่า 1 ไม่มีความหมาย (แถบจะแคบกว่าเกณฑ์เอง) */\n" +
+        "                       watch:Math.max(1,faNum('faTwatch',1.35))}; }",
+},
+{
+  id: "G3-watchband-use",
+  why: "ใช้ค่าที่ตั้ง แทนเลข 1.35 ที่ฝังไว้ · เก็บ return ที่ตายแล้วออกด้วย",
+  count: 1,
+  find: "  var _wOK=r.wmape<=lim*1.35, _bOK=Math.abs(r.bias)<=t.tbias*1.35;\n" +
+        "  var _why=(!_wOK?'W':'')+(!_bOK?'B':'');\n" +
+        "  if(_wOK && _bOK) return {k:'WATCH'+(Math.abs(r.bias)>t.tbias?' ·B':''),c:'w'};\n" +
+        "  return {k:'FAIL'+(_why?' ·'+_why:''),c:'r'};\n" +
+        "  return {k:'FAIL',c:'r'};",
+  repl: "  /* [patch G3] ตัวคูณมาจากช่อง \"แถบเฝ้าระวัง\" ที่ทีมตั้งเอง ไม่ใช่เลขในโค้ด */\n" +
+        "  var _m=t.watch;\n" +
+        "  var _wOK=r.wmape<=lim*_m, _bOK=Math.abs(r.bias)<=t.tbias*_m;\n" +
+        "  var _why=(!_wOK?'W':'')+(!_bOK?'B':'');\n" +
+        "  if(_wOK && _bOK) return {k:'WATCH'+(Math.abs(r.bias)>t.tbias?' ·B':''),c:'w'};\n" +
+        "  return {k:'FAIL'+(_why?' ·'+_why:''),c:'r'};",
+},
+{
+  id: "G4-watchband-rerender",
+  why: "เปลี่ยนค่าแล้วต้องจัดกลุ่มใหม่ทันที ไม่งั้นตารางค้างที่ค่าเดิม",
+  count: 1,
+  find: "  ['faTa','faTb','faTc','faTbias','faFabc','faFxyz','faFcat','faFst'].forEach(function(id){",
+  repl: "  /* [patch G4] faTwatch ต้องอยู่ในรายการด้วย ไม่งั้นปรับแล้วตารางไม่ขยับ */\n" +
+        "  ['faTa','faTb','faTc','faTbias','faTwatch','faFabc','faFxyz','faFcat','faFst'].forEach(function(id){",
 }
 
 ];
