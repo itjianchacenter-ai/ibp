@@ -182,6 +182,33 @@ function main() {
   if (/<script(?![^>]*\ssrc=)(?![^>]*type\s*=\s*["']application\/json)/i.test(html))
     die("ยังมีสคริปต์ inline หลงเหลือ — CSP จะบล็อก");
 
+  /* ── ตรวจ handler ที่เขียนไว้ในแอตทริบิวต์ ────────────────────────
+     รอบก่อนพลาดตรงนี้: ย้าย <script> ออกเป็นไฟล์แล้วคิดว่าจบ แต่ on*=
+     ก็เป็นโค้ดอินไลน์เหมือนกัน CSP บล็อกด้วย ปุ่มทั้งหมดของ M02 และชิป
+     เลือกเมนูของ NPD จึงกดไม่ทำงาน ทั้งที่ฟังก์ชันโหลดมาครบ
+     ตอนนี้มีสะพาน F1 รับไว้ให้ แต่รับเฉพาะชื่อที่อยู่ในรายการอนุญาต
+     จึงต้องกันไว้ว่า ถ้า v15 เพิ่ม handler ชื่อใหม่ build ต้องล้ม
+     ไม่ใช่ปล่อยให้ปุ่มตายเงียบ ๆ ไปเจอเอาตอนผู้ใช้กด               */
+  (function () {
+    /* สะพานถูกย้ายออกเป็นไฟล์ไปแล้ว จึงต้องหาใน parts ไม่ใช่ใน html */
+    const allSrc = html + "\n" + parts.map(function (p) { return p.body; }).join("\n");
+    const bridged = (allSrc.match(/ALLOW\s*=\s*\{([^}]*)\}/) || [, ""])[1]
+      .split(",").map(function (s) { return s.split(":")[0].trim(); }).filter(Boolean);
+    const used = {};
+    const scan = function (text) {
+      const re = /\son(?:click|change|input|dblclick|submit)\s*=\s*\\?["']\s*([A-Za-z_$][\w$]*)\s*\(/g;
+      let m; while ((m = re.exec(text))) used[m[1]] = 1;
+    };
+    scan(html); parts.forEach(function (p) { scan(p.body); });
+    const orphan = Object.keys(used).filter(function (f) { return bridged.indexOf(f) < 0; });
+    if (!bridged.length) die("ไม่พบรายการอนุญาตของสะพาน F1 — patch หลุดไปแล้วหรือเปล่า");
+    if (orphan.length)
+      die("handler ในแอตทริบิวต์ที่สะพาน F1 ไม่รู้จัก: " + orphan.join(", ") +
+          "\n     CSP จะบล็อก ปุ่มพวกนี้จะกดไม่ทำงานเงียบ ๆ — เพิ่มชื่อเข้า ALLOW ใน patch F1");
+    console.log("  handler ในแอตทริบิวต์ " + Object.keys(used).length +
+      " ชื่อ ผ่านสะพาน F1 ครบ (CSP ไม่ถูกผ่อน)");
+  })();
+
   fs.writeFileSync(OUT, html, "utf8");
   const total = parts.reduce(function (s, p) { return s + p.body.length; }, fs.statSync(OUT).size);
   console.log("  แยกสคริปต์เป็นไฟล์ " + parts.length + " ตัว: " +

@@ -730,6 +730,78 @@ module.exports = [
         "      var t=host.querySelector(\"table\"); if(t&&t.parentNode)t.parentNode.insertBefore(el,t); else host.appendChild(el); }\n" +
         "    el.textContent=txt;\n" +
         "  })();",
+},
+
+/* ── F1 · CSP ทำให้ปุ่มที่เขียน onclick= ใน HTML ตายหมด ★ ผมทำเอง ★ ────
+   ตอนแยกสคริปต์ออกเป็นไฟล์เพื่อให้ผ่าน CSP script-src 'self' ผมแก้เฉพาะ
+   <script> ที่ฝังในหน้า แต่ "แอตทริบิวต์" on*= ก็เป็นโค้ดอินไลน์เหมือนกัน
+   และถูก CSP บล็อกด้วย ฟังก์ชันทั้งหมดโหลดมาครบ แต่กดแล้วไม่มีอะไรเกิดขึ้น
+
+   ที่ตายจริง (ตรวจแล้วว่า el.onclick === null ทุกตัว):
+     NPD  · ชิปเลือกเมนู npdTog · เลือกทั้งหมด/ล้าง npdAll · Export xlsx/csv
+     M02  · Export Excel/CSV · รีเซ็ต Uplift · หน้าก่อน/ถัดไป m2Page
+            · ช่องกรอก Uplift ทุกช่อง m2Set (สร้างจาก JS ~90 ช่อง)
+
+   วิธีแก้ต้องไม่ผ่อน CSP (ที่ผ่อนคือเปิดช่องให้ XSS ที่ P7a/P7b เพิ่งอุด)
+   จึงใช้ตัวส่งต่อ event แบบ delegation ที่อ่านแอตทริบิวต์แล้วเรียกฟังก์ชัน
+   เฉพาะ 9 ชื่อที่อนุญาตไว้ พร้อมแปลงอาร์กิวเมนต์ที่เป็นค่าคงที่เท่านั้น
+   ไม่มี eval และไม่มีการรันสตริงใด ๆ อะไรที่อ่านไม่ออกจะไม่ถูกเรียก
+   ครอบคลุมทั้งปุ่มที่มีในหน้าและปุ่มที่ JS สร้างทีหลัง                    */
+{
+  id: "F1-csp-inline-handler-bridge",
+  why: "CSP บล็อก onclick= ในแอตทริบิวต์ — ชิปเลือกเมนู NPD และปุ่มทั้งหมดของ M02 กดไม่ทำงาน",
+  count: 1,
+  find: "</body>",
+  repl: "<script>\n" +
+        "/* [patch F1] สะพานเรียก handler ที่เขียนไว้ในแอตทริบิวต์ โดยไม่ผ่อน CSP */\n" +
+        "(function(){\n" +
+        "  if(typeof document===\"undefined\")return;\n" +
+        "  /* ถ้าวันไหน CSP ถูกผ่อนจนอินไลน์ทำงานเองได้ ให้ถอยออก ไม่งั้นจะยิงซ้ำสองครั้ง */\n" +
+        "  var probe=document.createElement(\"button\");\n" +
+        "  probe.setAttribute(\"onclick\",\"void 0\");\n" +
+        "  if(typeof probe.onclick===\"function\")return;\n" +
+        "  /* เรียกได้เฉพาะ 9 ชื่อนี้ ชื่ออื่นถูกเมิน */\n" +
+        "  var ALLOW={m2Xlsx:1,m2Csv:1,m2Reset:1,m2Page:1,m2Set:1,\n" +
+        "             npdTog:1,npdAll:1,npdXlsx:1,npdCsv:1};\n" +
+        "  var G=(typeof window!==\"undefined\")?window:null;\n" +
+        "  function parseCall(code,el){\n" +
+        "    var m=/^\\s*([A-Za-z_$][\\w$]*)\\s*\\(([^()]*)\\)\\s*;?\\s*$/.exec(code||\"\");\n" +
+        "    if(!m)return null;\n" +
+        "    var name=m[1];\n" +
+        "    if(!ALLOW[name]||!G||typeof G[name]!==\"function\")return null;\n" +
+        "    var raw=m[2].replace(/^\\s+|\\s+$/g,\"\"),args=[];\n" +
+        "    if(raw){\n" +
+        "      var parts=raw.match(/'[^']*'|\"[^\"]*\"|[^,]+/g)||[];\n" +
+        "      for(var i=0;i<parts.length;i++){\n" +
+        "        var p=parts[i].replace(/^\\s+|\\s+$/g,\"\");\n" +
+        "        if(p===\"this\")args.push(el);\n" +
+        "        else if(/^'[^']*'$/.test(p)||/^\"[^\"]*\"$/.test(p))args.push(p.slice(1,-1));\n" +
+        "        else if(/^-?\\d+(\\.\\d+)?$/.test(p))args.push(+p);\n" +
+        "        else if(p===\"true\"||p===\"false\")args.push(p===\"true\");\n" +
+        "        else return null;   /* อ่านไม่ออก = ไม่เดา ไม่เรียก */\n" +
+        "      }\n" +
+        "    }\n" +
+        "    return {fn:G[name],args:args,name:name};\n" +
+        "  }\n" +
+        "  function bridge(type){\n" +
+        "    document.addEventListener(type,function(ev){\n" +
+        "      var el=ev.target,attr=\"on\"+type;\n" +
+        "      while(el&&el.getAttribute){\n" +
+        "        var code=el.getAttribute(attr);\n" +
+        "        if(code){\n" +
+        "          var c=parseCall(code,el);\n" +
+        "          if(c){ try{ c.fn.apply(el,c.args); }\n" +
+        "                 catch(err){ console.error(\"[F1] \"+attr+\"=\\\"\"+code+\"\\\" ล้มเหลว\",err); } }\n" +
+        "          else console.error(\"[F1] ไม่รู้จักหรือไม่อนุญาต: \"+attr+'=\"'+code+'\"');\n" +
+        "          return;\n" +
+        "        }\n" +
+        "        el=el.parentNode;\n" +
+        "      }\n" +
+        "    },false);\n" +
+        "  }\n" +
+        "  bridge(\"click\"); bridge(\"change\");\n" +
+        "})();\n" +
+        "</script>\n</body>",
 }
 
 ];
