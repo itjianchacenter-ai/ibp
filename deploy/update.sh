@@ -42,13 +42,14 @@ echo "→ ประกอบ Control Tower 15 โมดูล (v15 + Module 02+)
 # build-v15.js ตรวจผลเองก่อนเขียนไฟล์ ถ้าจำนวนโมดูลไม่ครบหรือ id ซ้ำจะ exit 1
 ( cd "$SRC" && node build-v15.js ) || {
   echo "✗ ประกอบไม่สำเร็จ — ยกเลิกการ deploy ไฟล์บนเว็บไม่ถูกแตะ"; exit 1; }
-MERGED="$SRC/dist/JIANCHA_IBP_ControlTower_v15plus.html"
-[ -s "$MERGED" ] || { echo "✗ ไม่พบไฟล์ที่ประกอบแล้ว"; exit 1; }
+MERGED="$SRC/dist/v15plus"
+[ -s "$MERGED/index.html" ] || { echo "✗ ไม่พบไฟล์ที่ประกอบแล้ว"; exit 1; }
 
 echo "→ คัดลอกเฉพาะไฟล์ที่ต้องเสิร์ฟ"
 # --delete ทำงานเฉพาะภายใน $WEB เท่านั้น ไม่ออกไปนอกโฟลเดอร์นี้
 mkdir -p "$WEB"
-cp "$MERGED" "$WEB/index.html"                      # หน้าหลัก = 15 โมดูล
+rsync -a "$MERGED/index.html" "$WEB/"               # หน้าหลัก = 15 โมดูล
+rsync -a --delete "$MERGED/js/" "$WEB/js/"          # สคริปต์แยกไฟล์ (CSP: script-src 'self')
 rsync -a --delete "$SRC/samples/" "$WEB/samples/"   # ไฟล์ตัวอย่างสำหรับ UAT
 
 # ทางถอย: เก็บรุ่นแยกไฟล์ (Module 02+ อย่างเดียว 9 โมดูล) ไว้ที่ /m02p/
@@ -58,8 +59,8 @@ rsync -a "$SRC/index.html" "$WEB/m02p/"
 rsync -a --delete "$SRC/assets/" "$WEB/m02p/assets/"
 
 echo "→ ประทับเวอร์ชันบน URL ของ asset (กัน cache ค้างหลัง deploy)"
-# ตัวรวมเป็นไฟล์เดียว inline หมดจึงไม่มี asset ให้ประทับ — ประทับให้ /m02p/ แทน
-node "$SRC/deploy/stamp.js" "$WEB/m02p"
+node "$SRC/deploy/stamp.js" "$WEB"        # js/ ของหน้าหลัก
+node "$SRC/deploy/stamp.js" "$WEB/m02p"   # assets/ ของรุ่นแยกไฟล์
 
 chown -R www-data:www-data "$WEB"
 find "$WEB" -type d -exec chmod 755 {} \;

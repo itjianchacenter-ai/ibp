@@ -35,9 +35,10 @@ if (!fs.existsSync(INDEX)) {
 let html = fs.readFileSync(INDEX, "utf8");
 let stamped = 0, missing = 0;
 
-/* จับเฉพาะ src=/href= ที่ชี้ไปยัง assets/ ภายในเท่านั้น
-   ไม่แตะ https:// (cdnjs, Google Fonts) และไม่แตะที่มี ?v= อยู่แล้ว */
-html = html.replace(/\b(src|href)="(assets\/[^"?#]+)"/g, function (m, attr, rel) {
+/* จับเฉพาะ src=/href= ที่ชี้ไปยังไฟล์ภายใน (assets/ ของรุ่นแยกไฟล์ และ js/
+   ของรุ่นรวม v15+) เท่านั้น — ไม่แตะ https:// (cdnjs, Google Fonts)
+   และไม่แตะที่มี ?v= อยู่แล้ว */
+html = html.replace(/\b(src|href)="((?:assets|js)\/[^"?#]+)"/g, function (m, attr, rel) {
   const file = path.join(ROOT, rel);
   if (!fs.existsSync(file)) {
     console.warn("  ! ไม่พบไฟล์ " + rel + " — ปล่อยไว้ตามเดิม");
@@ -54,7 +55,7 @@ console.log("  ประทับเวอร์ชันแล้ว " + stampe
 
 /* ตรวจซ้ำว่าไม่มี asset ภายในที่หลุดการประทับ — ถ้าหลุดแปลว่าไฟล์นั้น
    จะยังค้าง cache เดิมหลัง deploy ซึ่งเป็นบั๊กที่มองไม่เห็น */
-const left = (html.match(/\b(?:src|href)="assets\/[^"?#]+"/g) || []);
+const left = (html.match(/\b(?:src|href)="(?:assets|js)\/[^"?#]+"/g) || []);
 if (left.length) {
   console.error("✗ ยังมี asset ที่ไม่ได้ประทับเวอร์ชัน:");
   left.forEach((l) => console.error("    " + l));

@@ -27,8 +27,10 @@ const path = require("path");
 
 const ROOT = __dirname;
 const V15 = path.join(ROOT, "vendor/JIANCHA_IBP_ControlTower_v15.html");
-const OUT_DIR = path.join(ROOT, "dist");
-const OUT = path.join(OUT_DIR, "JIANCHA_IBP_ControlTower_v15plus.html");
+/* ผลลัพธ์เป็นโฟลเดอร์ ไม่ใช่ไฟล์เดียว — เพราะต้องแยกสคริปต์ออกเป็นไฟล์
+   ดูเหตุผลที่ externalize() */
+const OUT_DIR = path.join(ROOT, "dist/v15plus");
+const OUT = path.join(OUT_DIR, "index.html");
 
 const read = (p) => fs.readFileSync(path.isAbsolute(p) ? p : path.join(ROOT, p), "utf8");
 const die = (m) => { console.error("✗ " + m); process.exit(1); };
@@ -137,9 +139,33 @@ function main() {
   });
   if (html.indexOf('<a href="#fc">') < 0) die("ไม่มี nav chip ของ fc");
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  /* ── แยกสคริปต์ inline ออกเป็นไฟล์ ────────────────────────────────
+     v15 เป็น Cowork artifact จึงเก็บ JS ไว้ inline ทั้งหมด แต่ไซต์นี้ตั้ง
+     CSP ไว้ที่ script-src 'self' https://cdnjs.cloudflare.com (ไม่มี
+     'unsafe-inline') เพราะโมดูล 02+ อ่านไฟล์ CSV จากผู้ใช้ จึงต้องกัน XSS
+     ผลคือ deploy ครั้งแรกสคริปต์ inline ถูกบล็อกทั้งหมด — แม้แต่ DATA ของ
+     v15 เองก็ไม่ถูกประกาศ หน้าจึงว่างเปล่าเงียบ ๆ
+     ทางแก้ที่ไม่ต้องผ่อน CSP: ย้ายออกเป็นไฟล์ .js แล้วอ้างด้วย src
+     (type="application/json" ไม่ใช่สคริปต์ที่รันได้ CSP ไม่บล็อก จึงคงไว้) */
+  fs.mkdirSync(path.join(OUT_DIR, "js"), { recursive: true });
+  const parts = [];
+  html = html.replace(/<script(?![^>]*\ssrc=)([^>]*)>([\s\S]*?)<\/script>/gi,
+    function (m, attrs, body) {
+      if (/type\s*=\s*["'](?!text\/javascript|application\/javascript)/i.test(attrs)) return m;
+      const name = String(parts.length + 1).padStart(2, "0") + ".js";
+      parts.push({ name: name, body: body });
+      return '<script src="js/' + name + '"' + attrs + "></script>";
+    });
+  parts.forEach(function (p) { fs.writeFileSync(path.join(OUT_DIR, "js", p.name), p.body, "utf8"); });
+
+  if (/<script(?![^>]*\ssrc=)(?![^>]*type\s*=\s*["']application\/json)/i.test(html))
+    die("ยังมีสคริปต์ inline หลงเหลือ — CSP จะบล็อก");
+
   fs.writeFileSync(OUT, html, "utf8");
-  console.log("✓ " + path.relative(ROOT, OUT) + "  (" + (fs.statSync(OUT).size / 1024).toFixed(0) + " KB)");
+  const total = parts.reduce(function (s, p) { return s + p.body.length; }, fs.statSync(OUT).size);
+  console.log("  แยกสคริปต์เป็นไฟล์ " + parts.length + " ตัว: " +
+    parts.map(function (p) { return "js/" + p.name + " (" + (p.body.length / 1024).toFixed(0) + "KB)"; }).join(" · "));
+  console.log("✓ " + path.relative(ROOT, OUT_DIR) + "/  (" + (total / 1024).toFixed(0) + " KB รวม)");
   console.log("  external refs " + after.ext + " รายการ (เท่าเดิม) · ไม่มี id ซ้ำ · fc ครบทุก element");
 }
 main();
