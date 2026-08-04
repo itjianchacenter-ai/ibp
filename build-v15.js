@@ -89,8 +89,29 @@ function scope(css, prefix) {
    ไม่เอา data.js / core.js / i18n เพราะ v15 มีของตัวเองอยู่แล้ว          */
 const JS = ["assets/js/store.js", "assets/js/forecast.js"];
 
+/* ── แก้บั๊กของ v15 ตอนประกอบ ─────────────────────────────────────────
+   แก้ที่นี่ ไม่แก้ vendor/ เพื่อให้เทียบกับต้นฉบับได้ตลอดและถอดออกได้ทันที
+   ทุก patch ต้องหาเจอครบตามจำนวนที่ประกาศไว้ ไม่งั้น build ล้ม —
+   กันการแก้ผิดตำแหน่งเงียบ ๆ เมื่อ v15 ออกเวอร์ชันใหม่                    */
+function applyPatches(html) {
+  const patches = require("./deploy/v15-patches.js");
+  console.log("  แก้บั๊ก v15 " + patches.length + " จุด:");
+  patches.forEach((p) => {
+    const hits = html.split(p.find).length - 1;
+    if (hits !== p.count)
+      die("patch " + p.id + " หาเจอ " + hits + " จุด แต่คาดว่า " + p.count +
+          " — v15 อาจเปลี่ยนเวอร์ชัน ตรวจก่อนแก้");
+    html = p.all ? html.split(p.find).join(p.repl)
+                 : html.slice(0, html.indexOf(p.find)) + p.repl +
+                   html.slice(html.indexOf(p.find) + p.find.length);
+    console.log("    ✓ " + p.id.padEnd(34) + p.why);
+  });
+  return html;
+}
+
 function main() {
   let html = read(V15);
+  html = applyPatches(html);
   const before = {
     sections: (html.match(/<section[^>]*id="/g) || []).length,
     ext: (html.match(/(?:src|href)="https?:\/\/[^"]+"/g) || []).length,
