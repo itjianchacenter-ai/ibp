@@ -17,7 +17,11 @@ Before=nginx.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/node /opt/jiancha-forecast/auth/jc-auth.js /etc/jc-auth/config.json
+# --jitless จำเป็น — MemoryDenyWriteExecute ด้านล่างห้ามหน่วยความจำ W+X
+# ซึ่ง JIT ของ V8 ต้องใช้ · ถ้าไม่ใส่ node จะ crash ตอน compiler ทำงาน
+# (ทดสอบบน droplet จริงแล้ว: ไม่ใส่ = crash วนใต้ Restart=always · ใส่ = 0 crash)
+# งานของบริการนี้คือ HMAC + เทียบสตริง ซึ่งเป็น native code อยู่แล้ว --jitless ไม่กระทบ
+ExecStart=/usr/bin/node --jitless /opt/jiancha-forecast/auth/jc-auth.js /etc/jc-auth/config.json
 Restart=always
 RestartSec=2
 
