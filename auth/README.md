@@ -108,6 +108,15 @@ sudo nano /etc/jc-auth/allowed-emails.txt     # บรรทัดละอี�
 
 allowlist เป็นด่านที่ **เพิ่มเข้ามา** ไม่ได้แทนที่ด่านอื่น — อยู่ในรายชื่อแต่ไม่ได้ล็อกอินผ่าน Azure ก็ยังเข้าไม่ได้
 
+เช็คก่อนว่าพอร์ต 9002 กับชื่อ service ยังว่างอยู่บนเครื่องนี้ (มีเว็บอื่นอยู่ด้วยหลายตัว)
+
+```bash
+sudo ss -lntp | grep ':9002' || echo "พอร์ต 9002 ว่าง ✓"
+systemctl list-units --all 'jc-auth*' --no-legend || true
+```
+
+ถ้าไม่ว่าง เปลี่ยน `port` ใน `config.json` แล้วแก้ `proxy_pass` ทั้ง 4 จุดใน vhost ให้ตรงกัน
+
 ```bash
 sudo cp /opt/jiancha-forecast/auth/jc-auth.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -121,6 +130,11 @@ systemctl status jc-auth
 sudo cp /opt/jiancha-forecast/deploy/nginx/forecast.scm-backoffice.conf /etc/nginx/sites-available/
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+> **`nginx -t` ต้องผ่านก่อนเสมอ** — `nginx -t` ตรวจ config ของ *ทุกไซต์* รวมกัน
+> ถ้าไฟล์นี้ผิด `reload` จะไม่ทำงาน (ของเดิมยังรันอยู่ ไม่มีใครล่ม) แต่ถ้ามีใคร
+> `restart` หรือเครื่อง reboot ตอน config ผิด **nginx จะไม่ขึ้นเลย และเว็บทุกตัว
+> บนเครื่องจะล่มพร้อมกัน** — อย่าข้าม `nginx -t` เด็ดขาด
 
 ### 5 · deploy
 

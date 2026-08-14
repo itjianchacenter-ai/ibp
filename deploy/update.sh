@@ -49,8 +49,12 @@ MERGED="$SRC/dist/v15plus"
 # ดูจาก nginx config ที่ "เปิดใช้จริง" ไม่ใช่จากไฟล์ใน git — เพราะช่วงก่อนตั้งค่า
 # Entra/Supabase เสร็จ ไฟล์ใน repo มี auth_request แล้วแต่ nginx ยังไม่ได้โหลด
 # ถ้าบังคับให้ต้องมี jc-auth ตลอด จะ deploy อัปเดตแอปไม่ได้เลยจนกว่า SSO จะเสร็จ
+# ดูเฉพาะ vhost ของ forecast เท่านั้น — ถ้า grep ทั้ง sites-enabled/ แล้ววันหนึ่ง
+# เว็บอื่นบนเครื่องนี้ใช้ auth_request /_auth บ้าง เราจะเข้าใจผิดว่า SSO ของเรา
+# เปิดอยู่ทั้งที่ยังไม่ได้เปิด แล้วไปตรวจผิดด่านทั้งชุด
 SSO_ON=0
-if grep -rqs "auth_request /_auth" /etc/nginx/sites-enabled/ 2>/dev/null; then SSO_ON=1; fi
+NGINX_VHOST="${JC_VHOST:-/etc/nginx/sites-enabled/forecast.scm-backoffice.conf}"
+if grep -qs "auth_request /_auth" "$NGINX_VHOST" 2>/dev/null; then SSO_ON=1; fi
 
 if [ "$SSO_ON" = "1" ]; then
   echo "→ ตรวจว่าตัวตรวจสิทธิ์ SSO ทำงานอยู่"
