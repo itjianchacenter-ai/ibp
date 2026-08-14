@@ -190,10 +190,11 @@ rejects(sign(Object.assign({}, goodBody, { email: "a@jianchatea.com.evil.com" })
 rejects(sign(Object.assign({}, goodBody, { email: "a@sub.jianchatea.com" })),
         "ไม่ได้รับอนุญาต", "subdomain ขององค์กรถูกปฏิเสธ (ต้องตรงเป๊ะ)");
 {
-  /* อีเมลที่มี @ สองตัว — ต้องตัดที่ตัวสุดท้าย ไม่ใช่ตัวแรก
-     ถ้าใช้ split('@')[1] จะได้ "jianchatea.com" จาก "a@jianchatea.com@evil.com" แล้วผ่าน */
+  /* อีเมลที่มี @ สองตัว — เดิมกันที่ด่านโดเมน (ตัดที่ @ ตัวสุดท้าย)
+     ตอนนี้ตกเร็วขึ้นตั้งแต่ด่านชุดตัวอักษร เพราะ local part มี @ ไม่ได้
+     ยิ่งเข้มกว่าเดิม — split('@')[1] ที่จะพลาดเคสนี้ยังถูก mutation test คุมอยู่ */
   rejects(sign(Object.assign({}, goodBody, { email: "a@jianchatea.com@evil.com" })),
-          "ไม่ได้รับอนุญาต", "อีเมลที่มี @ สองตัวถูกตัดที่ตัวสุดท้าย");
+          "อีเมล", "อีเมลที่มี @ สองตัวถูกปฏิเสธ (ตกตั้งแต่ด่านชุดตัวอักษร)");
 }
 rejects(sign(Object.assign({}, goodBody, { email: "" })), "อีเมล", "อีเมลว่างถูกปฏิเสธ");
 rejects(sign(Object.assign({}, goodBody, { email: "nodomain" })), "อีเมล", "อีเมลไม่มี @ ถูกปฏิเสธ");
@@ -203,6 +204,11 @@ rejects(sign(Object.assign({}, goodBody, { email: "nodomain" })), "อีเม�
 }
 rejects(sign(Object.assign({}, goodBody, { email: "a b@jianchatea.com" })),
         "อีเมล", "อีเมลที่มีช่องว่างถูกปฏิเสธ");
+/* อีเมลถูกฉีดลง HTML ผ่าน nginx sub_filter — อักขระ HTML ต้องเข้าไม่ได้เลย */
+rejects(sign(Object.assign({}, goodBody, { email: "a<img>@jianchatea.com" })),
+        "อีเมล", "อีเมลที่มีอักขระ HTML ถูกปฏิเสธ (กัน XSS ผ่านแถบผู้ใช้)");
+rejects(sign(Object.assign({}, goodBody, { email: "a\"b@jianchatea.com" })),
+        "อีเมล", "อีเมลที่มีอัญประกาศถูกปฏิเสธ");
 
 console.log("\n── เวลา ─────────────────────────────────────────────────────");
 rejects(sign(Object.assign({}, goodBody, { exp: NOW - 3600 })), "หมดอายุ", "token หมดอายุถูกปฏิเสธ");

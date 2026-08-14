@@ -211,8 +211,11 @@ function buildVerifier(cfg) {
     }
 
     const email = String(body.email || "").trim().toLowerCase();
-    /* ต้องมี @ และต้องไม่มีช่องว่าง — กันค่าประหลาดที่เล็ดลอดมาจาก IdP */
-    if (!email || email.indexOf("@") < 0 || /\s/.test(email))
+    /* บังคับชุดตัวอักษรแบบอนุรักษนิยม — อีเมลนี้ถูกส่งเป็น header ให้ nginx
+       และถูกฉีดลง HTML ของหน้าแอป (แถบผู้ใช้มุมจอ ผ่าน sub_filter)
+       จึงห้ามมีอักขระที่มีความหมายใน HTML/header เด็ดขาด
+       อีเมลองค์กรจริงอยู่ในชุดนี้ทั้งหมดอยู่แล้ว                          */
+    if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+$/.test(email))
       return { ok: false, why: "token ไม่มีอีเมลที่ใช้ได้" };
     const domain = email.slice(email.lastIndexOf("@") + 1);
     if (!domain || DOMAINS.indexOf(domain) < 0)
