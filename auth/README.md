@@ -165,7 +165,11 @@ node /opt/jiancha-forecast/auth/auth_test.js
 * **jc-auth ล่ม = ทั้งไซต์ขึ้น 500** เพราะ `auth_request` ล้มเหลว
   `Restart=always` กันไว้ชั้นหนึ่ง และ `update.sh` ตรวจก่อน deploy อีกชั้น
   ถ้าต้องปิด SSO ชั่วคราวจริง ๆ ให้คอมเมนต์บรรทัด `auth_request /_auth;` ทั้งสองจุดแล้ว reload
-* **เปลี่ยน `jwtSecret` ที่ Supabase = ทุกคนหลุดออกทันที** ต้องแก้ `/etc/jc-auth/config.json` ตาม
+* **โปรเจกต์นี้ใช้ ES256 (JWT Signing Keys)** — config ใช้ `jwtPublicKeys` ซึ่งเป็นกุญแจ
+  *สาธารณะ* ล้วน **ไม่มีความลับอยู่บนเครื่องนี้เลย** · ถ้า Supabase rotate กุญแจ
+  ผู้ใช้จะล็อกอินไม่ได้พร้อม log "ไม่รู้จัก kid" — แก้โดย
+  `curl https://<PROJECT>.supabase.co/auth/v1/.well-known/jwks.json`
+  แล้วอัปเดต `jwtPublicKeys` ใน config + `systemctl restart jc-auth`
 * คุกกี้อายุสูงสุด 12 ชม. หรือเท่าอายุ token แล้วแต่อันไหนสั้นกว่า
 * ระบบนี้ตอบว่า *"ใครเข้าได้"* เท่านั้น ยังไม่มีเรื่อง *"ใครทำอะไรได้"* (role/permission)
   ทุกคนที่เข้าได้เห็นทุกโมดูลเท่ากัน · ถ้าต้องการแยกสิทธิ์ต้องทำเพิ่ม

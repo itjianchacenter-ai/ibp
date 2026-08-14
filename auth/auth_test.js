@@ -31,8 +31,10 @@ function ok(cond, label) {
 }
 /* ปฏิเสธคือผลที่ถูกต้อง — ตรวจด้วยว่าเหตุผลตรงกับที่ตั้งใจ ไม่ใช่บังเอิญ
    ปฏิเสธด้วยเหตุอื่น (เช่น หมดอายุ) แล้วเข้าใจผิดว่ากันได้แล้ว           */
-function rejects(token, expectWhy, label) {
-  const r = verify(token, NOW);
+function rejects(token, expectWhy, label) { rejects2(verify, token, expectWhy, label); }
+/* แบบระบุ verifier เอง — ใช้กับโหมด ES256 ที่สร้าง verifier แยก */
+function rejects2(v, token, expectWhy, label) {
+  const r = v(token, NOW);
   if (r.ok) { fail++; console.log("  ✗ " + label + "  ← ผ่านได้ทั้งที่ต้องถูกปฏิเสธ"); return; }
   if (expectWhy && r.why.indexOf(expectWhy) < 0) {
     fail++; console.log("  ✗ " + label + "  ← ปฏิเสธด้วยเหตุ \"" + r.why + "\" ไม่ใช่ \"" + expectWhy + "\"");
@@ -228,6 +230,77 @@ rejects("!!!.???.***", "ถอดรหัส", "base64 ใช้ไม่ได
   const h = Buffer.from("[]", "utf8").toString("base64url");
   const b = Buffer.from(JSON.stringify(goodBody), "utf8").toString("base64url");
   rejects(h + "." + b + ".AAAA", null, "header ที่ไม่ใช่ object ถูกปฏิเสธ");
+}
+
+console.log("\n── ES256 (โหมด JWT Signing Keys — โปรเจกต์จริงใช้แบบนี้) ──────");
+{
+  /* สร้างกุญแจคู่จริงมาทดสอบ — ฝั่ง verifier เห็นแต่กุญแจสาธารณะ */
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const jwk = publicKey.export({ format: "jwk" });
+  const KID = "test-kid-001";
+  const esCfg = {
+    supabaseUrl: CFG.supabaseUrl, allowedDomains: ["jianchatea.com"],
+    requiredProvider: "azure", clockSkewSec: 60,
+    jwtPublicKeys: [{ kty: "EC", crv: "P-256", kid: KID, x: jwk.x, y: jwk.y }]
+  };
+  const vES = buildVerifier(esCfg);
+
+  function signES(body, kid, key) {
+    const h = Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT", kid: kid == null ? KID : kid }), "utf8").toString("base64url");
+    const b = Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
+    const s = crypto.sign("sha256", Buffer.from(h + "." + b, "utf8"),
+      { key: key || privateKey, dsaEncoding: "ieee-p1363" });
+    return h + "." + b + "." + s.toString("base64url");
+  }
+
+  const r = vES(signES(goodBody), NOW);
+  ok(r.ok && r.email === "somchai@jianchatea.com", "token ES256 ที่ถูกต้องผ่าน");
+
+  {
+    const other = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+    rejects2(vES, signES(goodBody, KID, other.privateKey), "ลายเซ็น",
+      "เซ็นด้วยกุญแจอื่น (kid ปลอมเป็นของเรา) ถูกปฏิเสธ");
+  }
+  rejects2(vES, signES(goodBody, "unknown-kid"), "kid",
+    "kid ที่ไม่รู้จักถูกปฏิเสธ (กุญแจ rotate / token จากที่อื่น)");
+  {
+    /* alg confusion กลับด้าน: เอากุญแจสาธารณะ (ที่ใครก็รู้) ไปทำเป็น HMAC secret
+       แล้วเซ็น HS256 — verifier โหมด EC ต้องไม่รับ HS256 เลย */
+    const pem = publicKey.export({ type: "spki", format: "pem" });
+    const forged = signHS256({ alg: "HS256", typ: "JWT" }, goodBody, pem);
+    rejects2(vES, forged, "ES256", "HS256 ที่เซ็นด้วยกุญแจสาธารณะถูกปฏิเสธ (alg confusion กลับด้าน)");
+  }
+  {
+    /* ตัดลายเซ็นให้สั้น/ยาวผิดขนาด — ES256 ต้อง 64 ไบต์พอดี */
+    const t = signES(goodBody).split(".");
+    rejects2(vES, t[0] + "." + t[1] + "." + Buffer.alloc(32).toString("base64url"),
+      "ลายเซ็น", "ลายเซ็น 32 ไบต์ (ครึ่งเดียว) ถูกปฏิเสธ");
+  }
+  {
+    /* แก้ payload คงลายเซ็นเดิม */
+    const t = signES(goodBody).split(".");
+    const evil = Buffer.from(JSON.stringify(Object.assign({}, goodBody,
+      { email: "attacker@evil.com" })), "utf8").toString("base64url");
+    rejects2(vES, t[0] + "." + evil + "." + t[2], "ลายเซ็น",
+      "แก้ payload คงลายเซ็น ES256 เดิม ถูกปฏิเสธ");
+  }
+  /* โหมด EC ล้วน ไม่มี secret — anon key เก่า (HS256) ต้องตกตั้งแต่ด่าน alg */
+  rejects2(vES, sign({ iss: ISS, aud: "anon", role: "anon", iat: NOW - 60, exp: NOW + 999999 }),
+    "ES256", "anon key (HS256) ถูกปฏิเสธตั้งแต่ด่าน alg ในโหมด EC");
+  /* claim อื่นยังถูกตรวจครบในโหมด ES256 */
+  rejects2(vES, signES(Object.assign({}, goodBody, { email: "x@gmail.com" })),
+    "ไม่ได้รับอนุญาต", "ES256 + โดเมนนอกองค์กร ถูกปฏิเสธ");
+  rejects2(vES, signES(Object.assign({}, goodBody,
+    { app_metadata: { provider: "email", providers: ["email"] } })),
+    "azure", "ES256 + provider email ถูกปฏิเสธ");
+  rejects2(vES, signES(Object.assign({}, goodBody, { exp: NOW - 3600 })),
+    "หมดอายุ", "ES256 หมดอายุ ถูกปฏิเสธ");
+
+  /* config ที่ไม่มีทั้ง secret และกุญแจ ต้องล้มตั้งแต่สร้าง verifier */
+  let threw = false;
+  try { buildVerifier({ supabaseUrl: CFG.supabaseUrl, allowedDomains: ["x.com"] }); }
+  catch (e) { threw = true; }
+  ok(threw, "config ไม่มีทั้ง jwtSecret และ jwtPublicKeys → ล้มตั้งแต่บูต");
 }
 
 /* ══ ทดสอบระดับ HTTP ═══════════════════════════════════════════════════ */

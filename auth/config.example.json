@@ -4,8 +4,15 @@
   "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
   "_supabaseUrl": "Supabase → Project Settings → API → Project URL (ค่าเดียวกับที่ใส่ใน login.html)",
 
-  "jwtSecret": "YOUR-JWT-SECRET",
-  "_jwtSecret": "Supabase → Project Settings → API → JWT Settings → JWT Secret · นี่คือความลับตัวจริง ใครได้ไปปลอม token เข้าระบบได้ทันที",
+  "_เลือกกุญแจ": "ใส่อย่างใดอย่างหนึ่ง — jwtPublicKeys (โปรเจกต์ที่ migrate ไป JWT Signing Keys แล้ว · ของเราเป็นแบบนี้) หรือ jwtSecret (โปรเจกต์รุ่นเก่า HS256)",
+
+  "jwtPublicKeys": [
+    { "kty": "EC", "crv": "P-256", "kid": "ใส่ kid จาก JWKS", "x": "…", "y": "…" }
+  ],
+  "_jwtPublicKeys": "กุญแจ 'สาธารณะ' สำหรับตรวจ token ES256 — ไม่ใช่ความลับ ใช้เซ็นไม่ได้ ตรวจได้อย่างเดียว · เอาจาก  curl https://<PROJECT>.supabase.co/auth/v1/.well-known/jwks.json  แล้วคัดเฉพาะ kty/crv/kid/x/y มาใส่ · ถ้า Supabase rotate กุญแจ ผู้ใช้จะล็อกอินไม่ได้พร้อมข้อความ 'ไม่รู้จัก kid' — รัน curl เดิมแล้วอัปเดตช่องนี้ตาม",
+
+  "jwtSecret": null,
+  "_jwtSecret": "เฉพาะโปรเจกต์รุ่นเก่า (HS256): Supabase → Project Settings → API → JWT Secret · อันนี้คือความลับจริง ห้ามหลุด · โปรเจกต์เราใช้ ES256 แล้ว ปล่อย null ไว้",
 
   "allowedDomains": ["jianchatea.com"],
   "_allowedDomains": "โดเมนอีเมลที่เข้าได้ · ตรวจที่ฝั่ง server จึงเป็นด่านที่ปลอมไม่ได้ · เพิ่มโดเมนได้ถ้าต้องการ",

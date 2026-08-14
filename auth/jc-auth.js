@@ -53,7 +53,25 @@ function b64uEncode(buf) { return Buffer.from(buf).toString("base64url"); }
        เป็นชั้นแรก แต่ชั้นที่เชื่อถือได้จริงคือชั้นนี้                       */
 function buildVerifier(cfg) {
   const ISS     = String(cfg.supabaseUrl).replace(/\/+$/, "") + "/auth/v1";
-  const SECRET  = Buffer.from(cfg.jwtSecret, "utf8");
+  /* ── สองโหมดตามยุคของ Supabase ─────────────────────────────────────
+     HS256 · jwtSecret        — secret ร่วม (โปรเจกต์รุ่นเก่า)
+     ES256 · jwtPublicKeys    — กุญแจสาธารณะจาก JWKS (โปรเจกต์ที่ migrate
+                                ไปใช้ JWT Signing Keys แล้ว — โปรเจกต์เราเป็นแบบนี้)
+
+     โหมด ES256 ดีกว่ามาก: เครื่องนี้เก็บแต่กุญแจ "สาธารณะ" ที่ใช้ตรวจได้
+     อย่างเดียว เซ็นไม่ได้ — ต่อให้เครื่องถูกเจาะ ก็ไม่มีความลับให้ขโมย
+     กุญแจถูก pin ไว้ใน config (ไม่ fetch ตอนรัน) การตรวจจึงยัง offline
+     100% เหมือนเดิม · ข้อแลก: ถ้า Supabase rotate กุญแจ ต้องอัปเดต config
+     ตาม (ดู README §rotate)                                             */
+  const SECRET  = cfg.jwtSecret ? Buffer.from(cfg.jwtSecret, "utf8") : null;
+  const ECKEYS  = (cfg.jwtPublicKeys || []).map(function (jwk) {
+    if (jwk.kty !== "EC" || jwk.crv !== "P-256")
+      throw new Error("jwtPublicKeys รองรับเฉพาะ EC P-256 (ได้ " + jwk.kty + "/" + jwk.crv + ")");
+    return { kid: String(jwk.kid || ""),
+             key: crypto.createPublicKey({ key: jwk, format: "jwk" }) };
+  });
+  if (!SECRET && !ECKEYS.length)
+    throw new Error("config ต้องมี jwtSecret (HS256) หรือ jwtPublicKeys (ES256) อย่างน้อยหนึ่งอย่าง");
   const SKEW    = cfg.clockSkewSec == null ? 60 : cfg.clockSkewSec;
   const DOMAINS = (cfg.allowedDomains || []).map(function (d) {
     return String(d).trim().toLowerCase().replace(/^@/, "");
@@ -126,17 +144,41 @@ function buildVerifier(cfg) {
     if (!head || typeof head !== "object" || !body || typeof body !== "object")
       return { ok: false, why: "โครงสร้าง JWT ไม่ถูก" };
 
-    if (head.alg !== "HS256")
-      return { ok: false, why: "alg ต้องเป็น HS256 เท่านั้น (ได้ " + head.alg + ")" };
     if (head.typ && String(head.typ).toUpperCase() !== "JWT")
       return { ok: false, why: "typ ไม่ใช่ JWT" };
 
-    const expect = crypto.createHmac("sha256", SECRET)
-      .update(parts[0] + "." + parts[1]).digest();
+    /* ── ตรวจลายเซ็นตาม alg — รับเฉพาะโหมดที่ config เปิดไว้ ─────────
+       ห้ามเชื่อ header ข้ามโหมด: token HS256 ห้ามผ่านเมื่อเราตั้งเฉพาะ
+       กุญแจ EC (กันคนเอากุญแจสาธารณะไปทำเป็น HMAC key — alg confusion
+       แบบคลาสสิก) และ ES256 ห้ามผ่านเมื่อมีแต่ secret                    */
     let got;
     try { got = b64uDecode(parts[2]); } catch (e) { return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" }; }
-    if (got.length !== expect.length) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
-    if (!crypto.timingSafeEqual(got, expect)) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
+    const signedData = parts[0] + "." + parts[1];
+
+    if (head.alg === "HS256") {
+      if (!SECRET) return { ok: false, why: "โปรเจกต์นี้ใช้ ES256 — ไม่รับ token HS256" };
+      const expect = crypto.createHmac("sha256", SECRET).update(signedData).digest();
+      if (got.length !== expect.length) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
+      if (!crypto.timingSafeEqual(got, expect)) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
+    } else if (head.alg === "ES256") {
+      if (!ECKEYS.length) return { ok: false, why: "ไม่ได้ตั้งกุญแจ ES256 — ไม่รับ token ES256" };
+      /* pin ตาม kid — token ของ GoTrue มี kid เสมอ · kid ที่ไม่รู้จัก
+         = กุญแจถูก rotate แล้ว หรือเป็น token จากที่อื่น → ปฏิเสธ        */
+      const kid = String(head.kid || "");
+      const hit = ECKEYS.find(function (k) { return k.kid === kid; });
+      if (!hit) return { ok: false, why: "ไม่รู้จัก kid " + (kid || "(ว่าง)") +
+                         " — กุญแจอาจถูก rotate แล้ว ต้องอัปเดต jwtPublicKeys" };
+      /* ลายเซ็น JWT ES256 เป็น r||s ดิบ 64 ไบต์ (ieee-p1363) ไม่ใช่ DER */
+      if (got.length !== 64) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
+      let pass = false;
+      try {
+        pass = crypto.verify("sha256", Buffer.from(signedData, "utf8"),
+          { key: hit.key, dsaEncoding: "ieee-p1363" }, got);
+      } catch (e) { pass = false; }
+      if (!pass) return { ok: false, why: "ลายเซ็นไม่ถูกต้อง" };
+    } else {
+      return { ok: false, why: "alg ต้องเป็น HS256 หรือ ES256 เท่านั้น (ได้ " + head.alg + ")" };
+    }
 
     if (typeof body.exp !== "number") return { ok: false, why: "ไม่มี exp" };
     if (now > body.exp + SKEW) return { ok: false, why: "token หมดอายุ" };
@@ -296,12 +338,16 @@ function main() {
 
   /* ตรวจ config ตั้งแต่ตอนบูต — ถ้าปล่อยให้ผิดแล้วค่อยพังตอนมีคนล็อกอิน
      อาการจะออกมาเป็น "ล็อกอินไม่ได้" ซึ่งไล่หาสาเหตุยากกว่ามาก */
-  ["supabaseUrl", "jwtSecret", "allowedDomains"].forEach(function (k) {
+  ["supabaseUrl", "allowedDomains"].forEach(function (k) {
     if (!cfg[k] || (Array.isArray(cfg[k]) && !cfg[k].length)) {
       console.error("✗ config ขาด " + k); process.exit(1);
     }
   });
-  if (/YOUR-PROJECT|YOUR-JWT-SECRET/.test(cfg.supabaseUrl + cfg.jwtSecret)) {
+  if (!cfg.jwtSecret && !(cfg.jwtPublicKeys || []).length) {
+    console.error("✗ config ต้องมี jwtSecret (HS256) หรือ jwtPublicKeys (ES256 จาก JWKS)");
+    process.exit(1);
+  }
+  if (/YOUR-PROJECT|YOUR-JWT-SECRET/.test(String(cfg.supabaseUrl) + String(cfg.jwtSecret || ""))) {
     console.error("✗ config ยังเป็นค่าตัวอย่าง — ใส่ค่าจริงจาก Supabase ก่อน");
     process.exit(1);
   }
