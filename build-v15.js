@@ -5,7 +5,11 @@
    ปัญหาที่แก้: มี Control Tower สองสายที่ไม่มีใครครบ
 
      ITDev Package (repo นี้)  9 โมดูล  — มี fc (02+ Sales Forecast)
-     v15                      14 โมดูล  — ไม่มี fc แต่มี exec fa lfl npd sched ss
+     vendor artifact          15 โมดูล  — ไม่มี fc แต่มี exec fa lfl npd sched promo ss
+
+   ฐาน vendor เดินมาถึง v17 แล้ว (v15 14 โมดูล → v16 +promo → v17 +ตัวอัปโหลด
+   รายงานสต๊อกในโมดูล 03+) ผลลัพธ์ตอนนี้จึงเป็น 16 โมดูล
+   ชื่อไฟล์ยังเป็น build-v15.js เพื่อไม่ต้องแตะ deploy/update.sh ที่รันบน production
 
    สคริปต์นี้ประกอบเป็น 15 โมดูล โดยฉีด fc เข้า v15 ตามขั้นตอนที่
    ITDev README §4 ออกแบบไว้ตรง ๆ (CSS ก่อน </style> · markup ก่อน section
@@ -26,7 +30,11 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = __dirname;
-const V15 = path.join(ROOT, "vendor/JIANCHA_IBP_ControlTower_v15.html");
+/* ฐาน vendor ปัจจุบันคือ v17 (v15 → v16 เพิ่มโมดูล promo → v17 เพิ่มตัวอัปโหลด
+   รายงานสต๊อกในโมดูล 03+) — ชื่อไฟล์สคริปต์ยังเป็น build-v15 เพื่อไม่ต้องแตะ
+   deploy/update.sh ที่รันอยู่บน production · v15 ยังเก็บไว้ใน vendor/ สำหรับ
+   เทียบ patch ย้อนหลัง ไม่ได้ถูกอ่านแล้ว                                    */
+const V15 = path.join(ROOT, "vendor/JIANCHA_IBP_ControlTower_v17.html");
 /* ผลลัพธ์เป็นโฟลเดอร์ ไม่ใช่ไฟล์เดียว — เพราะต้องแยกสคริปต์ออกเป็นไฟล์
    ดูเหตุผลที่ externalize() */
 const OUT_DIR = path.join(ROOT, "dist/v15plus");

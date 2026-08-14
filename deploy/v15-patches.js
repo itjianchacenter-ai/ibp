@@ -112,14 +112,37 @@ module.exports = [
 
 /* ── P7 · XSS ที่ยังขาดการ escape ─────────────────────────────────────
    o.id มาจากไฟล์ .json ที่ผู้ใช้แลกกัน และจาก SharePoint list — เป็น stored XSS
-   ส่วน Data Explorer เขียนค่าจาก DATA ลง innerHTML ดิบ ๆ                  */
+   ส่วน Data Explorer เขียนค่าจาก DATA ลง innerHTML ดิบ ๆ
+
+   [v17] เดิม P7a เป็น patch เดียว find "+o.id+'\"" all:true count:3 ซึ่งพอดีกับ
+   v15 ที่มีเฉพาะโมดูล sched · v16 เพิ่มโมดูล promo ที่ "คัดลอกโครงของ sched มาทั้งดุ้น"
+   รวมทั้งบั๊กตัวนี้ จำนวนจุดจึงเป็น 6 และ build ล้มตามที่ guard ตั้งใจไว้
+   แยกเป็น 3 patch ตามโมดูล เพื่อให้ตัวนับยังมีความหมายรายโมดูล — ถ้า v18
+   เพิ่มโมดูลที่ลอกโครงเดิมมาอีก จะล้มให้เห็นอีกครั้ง ไม่ใช่เงียบ           */
 {
   id: "P7a-sched-id-escape",
-  why: "o.id ไม่ถูก escape ในแอตทริบิวต์ — stored XSS ผ่านไฟล์ .json / SharePoint",
-  count: 3,
+  why: "o.id ไม่ถูก escape ในแอตทริบิวต์ (sched) — stored XSS ผ่านไฟล์ .json / SharePoint",
+  count: 1,
+  find: "\" data-id=\"'+o.id+'\" title=\"'+schEsc(o.s+' · '",
+  repl: "\" data-id=\"'+schEsc(o.id)+'\" title=\"'+schEsc(o.s+' · '"
+},
+{
+  id: "P7a2-promo-id-escape",
+  why: "โมดูล promo (ใหม่ใน v16) ลอกบั๊กเดียวกันมา — o.id ดิบใน data-id ทั้งที่ o.code/o.own escape แล้ว",
+  count: 1,
+  find: "\" data-id=\"'+o.id+'\" title=\"'+pmEsc(o.code+' · '",
+  repl: "\" data-id=\"'+pmEsc(o.id)+'\" title=\"'+pmEsc(o.code+' · '"
+},
+{
+  /* บรรทัดปุ่มแก้ไข/ลบ เหมือนกันทุกตัวอักษรทั้งใน sched และ promo จึงแก้พร้อมกัน
+     schEsc เป็น function declaration ระดับบนสุดของ <script> ก้อนเดียวกับ pmEsc
+     (บรรทัด 3416 และ 3892 ของ v17) จึงอยู่ใน scope ของทั้งสองโมดูล            */
+  id: "P7a3-rowbtn-id-escape",
+  why: "ปุ่มแก้ไข/ลบ ใส่ o.id ดิบใน data-ed/data-rm — ทั้ง sched และ promo",
+  count: 2,
   all: true,
-  find: "+o.id+'\"",
-  repl: "+schEsc(o.id)+'\""
+  find: "<button type=\"button\" class=\"rowbtn\" data-ed=\"'+o.id+'\">แก้ไข</button><button type=\"button\" class=\"rowbtn del\" data-rm=\"'+o.id+'\">ลบ</button>",
+  repl: "<button type=\"button\" class=\"rowbtn\" data-ed=\"'+schEsc(o.id)+'\">แก้ไข</button><button type=\"button\" class=\"rowbtn del\" data-rm=\"'+schEsc(o.id)+'\">ลบ</button>"
 },
 {
   id: "P7b-explorer-escape",
@@ -273,10 +296,18 @@ module.exports = [
   id: "C1-npdinit-guard",
   why: "payload NPD ผิดรูปทำให้ faInit/jcsInit/initDataset ไม่ทำงานตามไปด้วย",
   count: 1,
-  find: " m2Init();\n schInit();\n npdInit();\n faInit();",
+  /* [v17] ลำดับ boot เพิ่ม pmInit() (v16) และ covInit() (v17) แทรกกลาง
+     ทั้งสองตัวไม่มีตัวกันเช่นกัน และ covInit() คือตัวที่อ่านไฟล์ผู้ใช้ —
+     เป็นตัวที่ล้มง่ายที่สุดในลำดับนี้ ถ้ามันโยน ทุกอย่างหลังจากนั้น
+     (npdInit faInit execInit jcsInit initDataset) จะไม่ทำงานทั้งหมด
+     v17 ห่อ covInit ด้วย typeof แต่ typeof กันได้แค่ "ไม่มีฟังก์ชัน"
+     ไม่ได้กัน "ฟังก์ชันมีแต่โยน"                                          */
+  find: " m2Init();\n schInit();\n pmInit();\n if(typeof covInit===\"function\") covInit();\n npdInit();\n faInit();",
   repl: " /* [patch C1] ห่อทุก init ไม่ให้โมดูลเดียวล้มแล้วลากตัวอื่นไปด้วย */\n" +
         " try{m2Init()}catch(e){console.error(\"m2Init\",e)}\n" +
         " try{schInit()}catch(e){console.error(\"schInit\",e)}\n" +
+        " try{pmInit()}catch(e){console.error(\"pmInit\",e)}\n" +
+        " try{if(typeof covInit===\"function\")covInit()}catch(e){console.error(\"covInit\",e)}\n" +
         " try{npdInit()}catch(e){console.error(\"npdInit\",e)}\n" +
         " try{faInit()}catch(e){console.error(\"faInit\",e)}"
 },
@@ -312,8 +343,12 @@ module.exports = [
    ชื่อเมนูหรือรายการด่านที่มีคอมมาจะทำให้คอลัมน์เลื่อนทั้งแถว */
 {
   id: "C3-schimport-csv-quotes",
-  why: "importer ตัดคอมมาโดยไม่สนอัญประกาศ ทั้งที่ exporter ของตัวเองใส่ให้",
-  count: 1,
+  why: "importer ตัดคอมมาโดยไม่สนอัญประกาศ ทั้งที่ exporter ของตัวเองใส่ให้ (sched + promo)",
+  count: 2,
+  all: true,
+  /* [v17] promo ลอก importer ของ sched มาทั้งบรรทัด บั๊กจึงมี 2 จุด
+     ทั้งคู่แก้ด้วยโค้ดชุดเดียวกันได้ เพราะเป็นการแยกฟิลด์ล้วน ๆ
+     ไม่ได้อ้างตัวแปรของโมดูลไหน                                          */
   find: "    var p=(l.indexOf(TAB)>=0?l.split(TAB):l.split(','));",
   repl: "    /* [patch C3] เคารพอัญประกาศแบบ CSV มาตรฐาน */\n" +
         "    var p;\n" +
@@ -482,12 +517,60 @@ module.exports = [
   find: "Inventory Value<br>616 SKU · ทุกคลัง",
   repl: "Inventory Value<br>566 SKU · 616 แถว · ทุกคลัง",
 },
+/* ── D1e ถูกถอดออกที่ v17 ─────────────────────────────────────────────
+   เดิม D1e แก้ข้อความ "▼1,739 (−1.7%) · 616 SKU" ที่ฝังตายในการ์ด
+   Ending Balance ของโมดูล 03+ · v17 เปลี่ยนการ์ดทั้งโมดูลจาก HTML ตายตัว
+   เป็น container ที่ render จากข้อมูล (CHANGELOG v16→v17 ข้อ 3) ข้อความนั้น
+   จึงไม่มีอยู่แล้ว — ต้นทางแก้ให้ถูกโครงสร้างกว่าเดิม จึงไม่ต้อง patch ต่อ
+
+   แต่โค้ดที่มา render แทนกลับ "นับแถวเป็น SKU" อีกครั้ง ดู D1f            */
+
+/* ── D1f · v17 นำบั๊กนับแถวเป็น SKU กลับมาในโค้ดที่เขียนใหม่ ────────────
+   covCompute ตั้ง T={sku:stock.length} และ w.sku++/c.sku++ รายแถว
+   DATA.stock ตั้งต้นมี 616 แถว = 566 รหัส (วัตถุดิบรหัสเดียวเก็บได้หลายคลัง)
+   การ์ด Ending Balance จึงกลับไปขึ้น "616 SKU" — ตัวเลขเดียวกับที่ D1a–D1e
+   แก้ไว้ทั้งชุดในรุ่นก่อน และยิ่งเพี้ยนขึ้นเมื่อผู้ใช้อัปไฟล์จริง 3 คลัง
+   เพราะรหัสเดียวจะมี 3 แถว
+
+   ที่ชี้ชัดว่าเป็นความพลั้งเผลอ ไม่ใช่การตั้งนิยามใหม่: ตัวนับ aging ใน
+   ฟังก์ชันเดียวกันนับรหัสไม่ซ้ำอยู่แล้ว (Object.keys(a.sku).length บรรทัด
+   ถัดมาไม่ถึง 40 บรรทัด) ไฟล์เดียวกันจึงนับ SKU สองแบบพร้อมกัน
+
+   ใช้ uniqCodes() ที่ D1c วางไว้แล้ว — เป็น function declaration ระดับบนสุด
+   ของ <script> ก้อนเดียวกัน จึง hoist ถึง covCompute โดยไม่ต้องสนลำดับ patch */
 {
-  id: "D1e-sku-sub-html",
-  why: "การ์ด Ending Balance ก็เขียน 616 SKU ไว้ตายตัว",
+  id: "D1f-cov-sku-uniq",
+  why: "v17 render การ์ด 03+ จากข้อมูลแล้วนับแถวเป็น SKU — การ์ดกลับไปขึ้น 616 SKU (จริง 566)",
   count: 1,
-  find: "▼1,739 (−1.7%)</span> · 616 SKU",
-  repl: "▼1,739 (−1.7%)</span> · 566 SKU · 616 แถว",
+  find: " var T={sku:stock.length,op:0,in:0,out:0,end:0,val:0,cons:0};\n" +
+        " var byWh={}, byCat={};\n",
+  repl: " /* [patch D1f] นับรหัสไม่ซ้ำ ไม่ใช่นับแถว — ให้ตรงกับตัวนับ aging\n" +
+        "    ในฟังก์ชันเดียวกัน และกับ D1a/D1b ที่ใช้ uniqCodes อยู่แล้ว */\n" +
+        " var T={sku:0,op:0,in:0,out:0,end:0,val:0,cons:0};\n" +
+        " var byWh={}, byCat={};\n" +
+        " var _rowsWh={}, _rowsCat={};\n",
+},
+{
+  id: "D1f2-cov-sku-wh",
+  why: "ยอด SKU รายคลังก็นับแถว — รหัสเดียวที่มีหลายล็อต/หลายแถวจะถูกนับซ้ำ",
+  count: 1,
+  find: "   w.sku++; w.op+=n(r.op); w.in+=n(r.in); w.out+=n(r.out); w.end+=n(r.end); w.val+=n(r.value);",
+  repl: "   (_rowsWh[r.wh]=_rowsWh[r.wh]||[]).push(r);   /* [patch D1f] */\n" +
+        "   w.op+=n(r.op); w.in+=n(r.in); w.out+=n(r.out); w.end+=n(r.end); w.val+=n(r.value);",
+},
+{
+  id: "D1f3-cov-sku-cat",
+  why: "ยอด SKU รายหมวดก็นับแถว — หมวดหนึ่งกินหลายคลัง จึงเฟ้อแน่นอน",
+  count: 1,
+  find: "   c.sku++; c.op+=n(r.op); c.in+=n(r.in); c.out+=n(r.out); c.end+=n(r.end); c.val+=n(r.value);\n" +
+        " });\n",
+  repl: "   (_rowsCat[r.cat]=_rowsCat[r.cat]||[]).push(r);   /* [patch D1f] */\n" +
+        "   c.op+=n(r.op); c.in+=n(r.in); c.out+=n(r.out); c.end+=n(r.end); c.val+=n(r.value);\n" +
+        " });\n" +
+        " /* [patch D1f] สรุปจำนวนรหัสไม่ซ้ำหลังเดินแถวครบ */\n" +
+        " T.sku=uniqCodes(stock);\n" +
+        " Object.keys(byWh).forEach(function(k){ byWh[k].sku=uniqCodes(_rowsWh[k]); });\n" +
+        " Object.keys(byCat).forEach(function(k){ byCat[k].sku=uniqCodes(_rowsCat[k]); });\n",
 },
 
 /* ── D2 · เกณฑ์ความแม่นยำที่พิมพ์ 0 จะเด้งกลับเป็นค่าตั้งต้นเงียบ ๆ ─────
