@@ -45,12 +45,27 @@ echo "→ ประกอบ Control Tower 15 โมดูล (v15 + Module 02+)
 MERGED="$SRC/dist/v15plus"
 [ -s "$MERGED/index.html" ] || { echo "✗ ไม่พบไฟล์ที่ประกอบแล้ว"; exit 1; }
 
+echo "→ ตรวจว่าตัวตรวจสิทธิ์ SSO ทำงานอยู่"
+# ถ้า jc-auth ล่ม auth_request จะล้มเหลว แล้ว nginx คืน 500 ทั้งไซต์
+# ต้องรู้ตั้งแต่ก่อน deploy ไม่ใช่ให้ผู้ใช้ไปเจอเอง
+AUTH_PORT="${JC_AUTH_PORT:-9002}"
+if curl -sf -m 5 -o /dev/null "http://127.0.0.1:$AUTH_PORT/whoami" \
+   || [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$AUTH_PORT/whoami")" = "401" ]; then
+  echo "  ✓ jc-auth ตอบที่พอร์ต $AUTH_PORT"
+else
+  echo "  ✗ jc-auth ไม่ตอบที่พอร์ต $AUTH_PORT — ถ้า deploy ต่อ ทั้งไซต์จะขึ้น 500"
+  echo "    ตรวจด้วย: systemctl status jc-auth · journalctl -u jc-auth -n 30"
+  exit 1
+fi
+
 echo "→ คัดลอกเฉพาะไฟล์ที่ต้องเสิร์ฟ"
 # --delete ทำงานเฉพาะภายใน $WEB เท่านั้น ไม่ออกไปนอกโฟลเดอร์นี้
 mkdir -p "$WEB"
-rsync -a "$MERGED/index.html" "$WEB/"               # หน้าหลัก = 15 โมดูล
+rsync -a "$MERGED/index.html" "$WEB/"               # หน้าหลัก = 16 โมดูล
 rsync -a --delete "$MERGED/js/" "$WEB/js/"          # สคริปต์แยกไฟล์ (CSP: script-src 'self')
 rsync -a --delete "$SRC/samples/" "$WEB/samples/"   # ไฟล์ตัวอย่างสำหรับ UAT
+rsync -a "$SRC/auth/login.html" "$WEB/"             # หน้า SSO — nginx ยกเว้นจาก auth_request
+rsync -a "$SRC/auth/login.js"   "$WEB/"
 
 # ทางถอย: เก็บรุ่นแยกไฟล์ (Module 02+ อย่างเดียว 9 โมดูล) ไว้ที่ /m02p/
 # ถ้าตัวรวมมีปัญหาบน production ยังเปิดใช้ตัวนี้ได้ทันทีโดยไม่ต้อง deploy ใหม่
@@ -76,35 +91,59 @@ echo "  หมายเหตุ: docs/ build.js server.js README.md ไม่�
 #   2. URL ของ asset ต้องมี ?v=<hash ของเนื้อไฟล์>  → เนื้อเปลี่ยน = URL เปลี่ยน
 # ถ้าสองข้อนี้จริง max-age 4 ชม. ไม่มีผล เพราะ URL เก่าไม่ถูกอ้างอีกแล้ว
 # ต่อไปนี้คือการ "ตรวจ" ไม่ใช่ "เชื่อ" — ยิงผ่าน Cloudflare จริงหลัง deploy
-echo "→ ตรวจว่า cache ค้างไม่ได้ (ยิงผ่าน Cloudflare จริง)"
-SITE="${SITE_URL:-https://forecast.scm-backoffice.com}"
+echo "→ ตรวจว่า cache ค้างไม่ได้ (ตรวจที่ไฟล์จริงบนดิสก์)"
+# เดิมด่านนี้ยิงผ่าน Cloudflare แล้วอ่าน hash จากหน้าเว็บ ทำแบบนั้นไม่ได้แล้ว
+# เพราะ SSO กันไว้ — curl ที่ไม่มีคุกกี้จะได้ 302 ไปหน้า login ไม่ใช่เนื้อหา
+# จึงย้ายมาตรวจที่ web root โดยตรง ซึ่ง "แน่นกว่าเดิม" ด้วยซ้ำ เพราะเทียบกับ
+# เนื้อไฟล์จริงที่จะถูกเสิร์ฟ ไม่ใช่สิ่งที่ CDN บังเอิญคืนมาตอนนั้น
 CACHE_FAIL=0
-
-HDR="$(curl -sI -m 25 "$SITE/" || true)"
-if printf '%s' "$HDR" | grep -qiE '^cache-control:.*(no-cache|no-store|max-age=0)'; then
-  echo "  ✓ index.html ไม่ถูก cache ($(printf '%s' "$HDR" | grep -i '^cache-control:' | tr -d '\r'))"
-else
-  echo "  ✗ index.html ถูก cache — ผู้ใช้จะค้างอยู่กับ URL ชุดเก่า"
-  printf '%s' "$HDR" | grep -iE '^(cache-control|cf-cache-status|age):' || true
-  CACHE_FAIL=1
-fi
-
-REFS="$(curl -s -m 25 "$SITE/" | grep -o 'js/[0-9]*\.js?v=[a-f0-9]*' | sort -u)"
+REFS="$(grep -o 'js/[0-9]*\.js?v=[a-f0-9]*' "$WEB/index.html" | sort -u)"
 [ -n "$REFS" ] || { echo "  ✗ หน้าไม่ได้อ้างไฟล์ js ที่ประทับเวอร์ชันเลย"; CACHE_FAIL=1; }
 for ref in $REFS; do
   want="${ref##*v=}"
-  got="$(curl -s -m 30 "$SITE/$ref" | sha256sum | cut -c1-8)"
+  file="$WEB/${ref%%\?*}"
+  got="$(sha256sum "$file" | cut -c1-8)"
   if [ "$want" = "$got" ]; then
     echo "  ✓ $ref  เนื้อไฟล์ตรงกับ hash ที่ประทับ"
   else
-    echo "  ✗ $ref  ประทับ $want แต่เนื้อไฟล์จริง $got — CF เสิร์ฟของเก่า"
+    echo "  ✗ $ref  ประทับ $want แต่เนื้อไฟล์จริง $got"
     CACHE_FAIL=1
   fi
 done
 
+echo "→ ตรวจว่า SSO กันจริง (ยิงผ่าน Cloudflare แบบไม่มีคุกกี้)"
+SITE="${SITE_URL:-https://forecast.scm-backoffice.com}"
+
+# 1 · หน้าแอปต้องไม่เสิร์ฟให้คนที่ยังไม่ล็อกอิน
+code="$(curl -s -m 25 -o /dev/null -w '%{http_code}' "$SITE/")"
+case "$code" in
+  302|303|401) echo "  ✓ /  ปิดอยู่สำหรับผู้ที่ยังไม่ล็อกอิน (HTTP $code)" ;;
+  200) echo "  ✗ /  เสิร์ฟเนื้อหาให้คนที่ยังไม่ล็อกอิน — SSO ไม่ทำงาน"; CACHE_FAIL=1 ;;
+  *)   echo "  ✗ /  ตอบ HTTP $code — ผิดปกติ (jc-auth ล่มหรือเปล่า?)"; CACHE_FAIL=1 ;;
+esac
+
+# 2 · ข้อมูลต้องไม่หลุดทาง URL ตรง — นี่คือเหตุผลทั้งหมดที่ต้องกันที่ nginx
+for ref in $REFS; do
+  code="$(curl -s -m 25 -o /dev/null -w '%{http_code}' "$SITE/$ref")"
+  if [ "$code" = "200" ]; then
+    echo "  ✗ $ref  ดึงได้โดยไม่ต้องล็อกอิน — ข้อมูลยอดขายหลุด"
+    CACHE_FAIL=1
+  else
+    echo "  ✓ $ref  ปิดอยู่ (HTTP $code)"
+  fi
+done
+
+# 3 · หน้า login ต้องเปิดได้ ไม่งั้นไม่มีใครเข้าระบบได้เลย
+code="$(curl -s -m 25 -o /dev/null -w '%{http_code}' "$SITE/login.html")"
+if [ "$code" = "200" ]; then
+  echo "  ✓ /login.html เปิดได้ (HTTP 200)"
+else
+  echo "  ✗ /login.html ตอบ HTTP $code — ไม่มีใครเข้าระบบได้"
+  CACHE_FAIL=1
+fi
+
 if [ "$CACHE_FAIL" -ne 0 ]; then
-  echo "✗ ด่าน cache ไม่ผ่าน — ผู้ใช้อาจได้ของเก่าหลัง deploy"
-  echo "  ทางแก้: ตั้ง Browser Cache TTL = Respect Existing Headers ที่ Cloudflare"
+  echo "✗ ด่านตรวจหลัง deploy ไม่ผ่าน"
   exit 1
 fi
-echo "  cache ปลอดภัย: HTML สดเสมอ + URL ผูกกับ hash ของเนื้อไฟล์"
+echo "  cache ปลอดภัย · SSO กันจริงทั้งหน้าแอปและไฟล์ข้อมูล"

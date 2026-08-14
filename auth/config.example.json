@@ -1,0 +1,22 @@
+{
+  "_อ่านก่อน": "คัดลอกเป็น /etc/jc-auth/config.json แล้วใส่ค่าจริง · chmod 600 · เจ้าของเป็น root — ไฟล์นี้มี JWT secret ห้าม commit ลง git เด็ดขาด",
+
+  "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+  "_supabaseUrl": "Supabase → Project Settings → API → Project URL (ค่าเดียวกับที่ใส่ใน login.html)",
+
+  "jwtSecret": "YOUR-JWT-SECRET",
+  "_jwtSecret": "Supabase → Project Settings → API → JWT Settings → JWT Secret · นี่คือความลับตัวจริง ใครได้ไปปลอม token เข้าระบบได้ทันที",
+
+  "allowedDomains": ["jianchatea.com"],
+  "_allowedDomains": "โดเมนอีเมลที่เข้าได้ · ตรวจที่ฝั่ง server จึงเป็นด่านที่ปลอมไม่ได้ · เพิ่มโดเมนได้ถ้าต้องการ",
+
+  "port": 9002,
+  "host": "127.0.0.1",
+  "_host": "ผูกกับ loopback เท่านั้น — บริการนี้ต้องไม่เปิดออกอินเทอร์เน็ต nginx เป็นตัวเดียวที่เรียกได้",
+
+  "cookieName": "jc_ibp_sso",
+  "cookieMaxAgeSec": 43200,
+  "_cookieMaxAgeSec": "อายุคุกกี้สูงสุด 12 ชม. · ระบบจะใช้ค่าที่สั้นกว่าระหว่างค่านี้กับอายุจริงของ token",
+
+  "clockSkewSec": 60
+}

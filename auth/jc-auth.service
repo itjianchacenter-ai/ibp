@@ -1,0 +1,50 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# jc-auth · ตัวตรวจสิทธิ์ของ forecast.scm-backoffice.com
+#
+#   sudo cp deploy/../auth/jc-auth.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now jc-auth
+#   systemctl status jc-auth
+#
+# บริการนี้ฟังเฉพาะ 127.0.0.1:9002 — ไม่เปิดออกอินเทอร์เน็ต
+# nginx เป็นตัวเดียวที่เรียกถึง
+# ═══════════════════════════════════════════════════════════════════════════
+[Unit]
+Description=JIAN CHA IBP · ตัวตรวจสิทธิ์ SSO (auth_request backend)
+Documentation=file:///opt/jiancha-forecast/auth/README.md
+After=network.target
+Before=nginx.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /opt/jiancha-forecast/auth/jc-auth.js /etc/jc-auth/config.json
+Restart=always
+RestartSec=2
+
+# รันด้วยผู้ใช้ที่ไม่มีสิทธิ์อะไร — ถ้าบริการนี้ถูกเจาะ จะไปต่อไม่ได้
+User=www-data
+Group=www-data
+
+# ── ลดพื้นที่ความเสียหายถ้าถูกเจาะ ────────────────────────────────────
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# อ่านได้อย่างเดียว ไม่ต้องเขียนอะไรลงดิสก์เลย
+ReadOnlyPaths=/opt/jiancha-forecast/auth /etc/jc-auth
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jc-auth
+
+[Install]
+WantedBy=multi-user.target

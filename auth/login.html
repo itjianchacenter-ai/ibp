@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>เข้าสู่ระบบ · JIAN CHA IBP Control Tower</title>
+
+<!-- ตั้งค่า Supabase — เป็นข้อมูลสาธารณะทั้งคู่ ไม่ใช่ความลับ
+     (ความลับคือ JWT secret ซึ่งอยู่ฝั่ง server ใน /etc/jc-auth/config.json เท่านั้น)
+     type="application/json" ไม่ใช่สคริปต์ที่รันได้ CSP จึงไม่บล็อก
+     และไม่ต้องผ่อน script-src เป็น 'unsafe-inline' -->
+<script type="application/json" id="jc-auth-config">
+{
+  "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+  "provider": "azure",
+  "orgDomain": "jianchatea.com"
+}
+</script>
+
+<style>
+:root{
+  /* ชุดสีเดียวกับตัวแอป (assets/css/tower.css) เพื่อให้หน้า login กับหน้าที่เห็น
+     หลังล็อกอินเป็นระบบเดียวกัน · --jc-gold ยกมาจากหน้า login ของ jc-round */
+  --jc-ink:#1C1A17; --jc-ink-2:#2B2824; --jc-grey:#6E695F; --jc-grey-2:#948E82;
+  --jc-cream:#F1EDE4; --jc-paper:#FCFAF5; --jc-sand:#EAE4D8; --jc-taupe:#D8D1C3;
+  --jc-gold:#AD9C82; --jc-white:#fff; --neg:#B96A55;
+  --font:"Sukhumvit Set","Sukhumvit","IBM Plex Sans Thai","Noto Sans Thai",-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font); background:var(--jc-ink); color:var(--jc-ink);
+  line-height:1.55; -webkit-font-smoothing:antialiased; font-size:14px;
+  min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem;
+}
+.box{
+  background:var(--jc-paper); max-width:400px; width:100%;
+  padding:2.4rem 2.1rem; border-radius:4px; border-top:4px solid var(--jc-gold);
+  box-shadow:0 24px 60px rgba(0,0,0,.35);
+}
+.mark{text-align:center;margin-bottom:1.6rem}
+.mark .cn{font-size:30px;letter-spacing:.12em;color:var(--jc-ink);font-weight:700}
+.mark .en{font-size:11px;letter-spacing:.34em;color:var(--jc-gold);margin-top:.45rem;font-weight:600}
+.mark .sys{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--jc-grey-2);margin-top:.9rem;font-weight:600}
+hr.rule{height:1px;background:var(--jc-taupe);border:0;margin:1.3rem 0}
+
+h1{font-size:17px;font-weight:600;letter-spacing:-.01em;margin-bottom:.35rem}
+p.sub{font-size:13px;color:var(--jc-grey);margin-bottom:1.4rem}
+
+button.sso{
+  width:100%; display:flex; align-items:center; justify-content:center; gap:.65rem;
+  padding:.85em 1.1em; font-size:14px; font-family:var(--font); font-weight:600;
+  border:1px solid var(--jc-ink); background:var(--jc-ink); color:#fff;
+  border-radius:3px; cursor:pointer; transition:.15s;
+}
+button.sso:hover:not(:disabled){background:transparent;color:var(--jc-ink)}
+button.sso:disabled{opacity:.55;cursor:not-allowed}
+button.sso svg{width:17px;height:17px;flex:none}
+
+.note{font-size:12px;color:var(--jc-grey);margin-top:1.3rem;line-height:1.7}
+.note b{color:var(--jc-ink-2)}
+
+.msg{padding:.75rem .9rem;border-radius:3px;font-size:13px;margin-bottom:1.2rem;display:none}
+.msg.show{display:block}
+.msg.err{background:#F7E9E5;border:1px solid var(--neg);color:#7d3f30}
+.msg.info{background:var(--jc-sand);border:1px solid var(--jc-taupe);color:var(--jc-ink-2)}
+
+.foot{margin-top:1.6rem;font-size:11px;letter-spacing:.04em;color:var(--jc-grey-2);text-align:center}
+
+@media (max-width:420px){ body{padding:1rem} .box{padding:1.8rem 1.4rem} }
+</style>
+</head>
+<body>
+
+<main class="box">
+  <div class="mark">
+    <div class="cn">见茶山</div>
+    <div class="en">JIAN CHA</div>
+    <div class="sys">IBP Demand-Sensing Control Tower</div>
+  </div>
+
+  <hr class="rule">
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <h1>เข้าสู่ระบบ</h1>
+  <p class="sub">ใช้บัญชี Microsoft 365 ขององค์กร</p>
+
+  <button class="sso" id="btn" type="button">
+    <!-- โลโก้ Microsoft 4 ช่อง วาดเป็น SVG ในหน้า ไม่ดึงรูปจากภายนอก -->
+    <svg viewBox="0 0 23 23" aria-hidden="true" focusable="false">
+      <rect x="1"  y="1"  width="10" height="10" fill="#F25022"/>
+      <rect x="12" y="1"  width="10" height="10" fill="#7FBA00"/>
+      <rect x="1"  y="12" width="10" height="10" fill="#00A4EF"/>
+      <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+    </svg>
+    <span id="btnlab">เข้าสู่ระบบด้วย Microsoft 365</span>
+  </button>
+
+  <p class="note">
+    เปิดให้เฉพาะบัญชีของ <b id="dom">jianchatea.com</b> เท่านั้น ·
+    บัญชีนอกโดเมนนี้จะถูกปฏิเสธแม้ล็อกอิน Microsoft สำเร็จ
+  </p>
+
+  <div class="foot">JC-IBP-SRS-M02P-001</div>
+</main>
+
+<script src="login.js"></script>
+</body>
+</html>
