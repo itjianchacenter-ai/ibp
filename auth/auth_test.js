@@ -122,6 +122,56 @@ console.log("\n── ระบบอื่นที่ใช้ Supabase projec
   ok(verify(sign(linked), NOW).ok, "บัญชีที่ผูกทั้ง email และ azure ผ่าน (มี azure ในรายการ)");
 }
 
+console.log("\n── allowlist รายอีเมล ───────────────────────────────────────");
+{
+  const fs2 = require("fs"), os = require("os"), pth = require("path");
+  const dir = fs2.mkdtempSync(pth.join(os.tmpdir(), "jcauth-"));
+  const listFile = pth.join(dir, "allowed.txt");
+
+  /* 1 · รายชื่อในไฟล์ config */
+  const vInline = buildVerifier(Object.assign({}, CFG, {
+    allowedEmails: ["Somchai@JianChaTea.com", "suda@jianchatea.com"]
+  }));
+  ok(vInline(sign(goodBody), NOW).ok, "อยู่ในรายชื่อ (config) → ผ่าน");
+  {
+    const other = sign(Object.assign({}, goodBody, { email: "malee@jianchatea.com" }));
+    const r = vInline(other, NOW);
+    ok(!r.ok && /ไม่อยู่ในรายชื่อ/.test(r.why),
+       "อยู่ในโดเมนแต่ไม่อยู่ในรายชื่อ → ถูกปฏิเสธ");
+  }
+
+  /* 2 · รายชื่อจากไฟล์ + คอมเมนต์ + ตัวพิมพ์ใหญ่ */
+  fs2.writeFileSync(listFile, "# ทีม IBP\nSOMCHAI@jianchatea.com\n\n  suda@jianchatea.com  \n");
+  const vFile = buildVerifier(Object.assign({}, CFG, { allowedEmailsFile: listFile }));
+  ok(vFile(sign(goodBody), NOW).ok, "อยู่ในรายชื่อ (ไฟล์ · ตัวใหญ่ · มีคอมเมนต์) → ผ่าน");
+  ok(!vFile(sign(Object.assign({}, goodBody, { email: "malee@jianchatea.com" })), NOW).ok,
+     "ไม่อยู่ในไฟล์ → ถูกปฏิเสธ");
+
+  /* 3 · แก้ไฟล์แล้วมีผลทันที ไม่ต้อง restart */
+  fs2.writeFileSync(listFile, "malee@jianchatea.com\n");
+  ok(vFile(sign(Object.assign({}, goodBody, { email: "malee@jianchatea.com" })), NOW).ok,
+     "เพิ่มชื่อในไฟล์แล้วมีผลทันที (ไม่ต้อง restart)");
+  ok(!vFile(sign(goodBody), NOW).ok, "ลบชื่อออกจากไฟล์แล้วเข้าไม่ได้ทันที");
+
+  /* 4 · fail closed — ตั้งไฟล์ไว้แต่อ่านไม่ได้ ต้องปฏิเสธ ไม่ใช่ปล่อยผ่าน */
+  const vMissing = buildVerifier(Object.assign({}, CFG, {
+    allowedEmailsFile: pth.join(dir, "ไม่มีไฟล์นี้.txt")
+  }));
+  ok(!vMissing(sign(goodBody), NOW).ok,
+     "ไฟล์รายชื่อหาย → ปฏิเสธทุกคน (fail closed ไม่ใช่ fail open)");
+
+  /* 5 · ไม่ตั้ง allowlist = ใช้ด่านโดเมนตามเดิม */
+  ok(verify(sign(goodBody), NOW).ok, "ไม่ตั้ง allowlist → ใช้ด่านโดเมนตามเดิม");
+
+  /* 6 · allowlist ไม่ได้ทำให้ด่านอื่นอ่อนลง */
+  ok(!vInline(sign(Object.assign({}, goodBody, {
+       email: "somchai@jianchatea.com",
+       app_metadata: { provider: "email", providers: ["email"] } })), NOW).ok,
+     "อยู่ในรายชื่อ แต่ไม่ได้มาจาก azure → ยังถูกปฏิเสธ");
+
+  fs2.rmSync(dir, { recursive: true, force: true });
+}
+
 console.log("\n── project อื่น ─────────────────────────────────────────────");
 rejects(sign(Object.assign({}, goodBody, { iss: "https://evil.supabase.co/auth/v1" })),
         "iss", "token จาก Supabase project อื่นถูกปฏิเสธ");

@@ -13,6 +13,12 @@
   "requiredProvider": "azure",
   "_requiredProvider": "รับเฉพาะ token ที่ออกผ่าน Entra/Azure · จำเป็นเพราะ Supabase project นี้ใช้ร่วมกับ hr-huddle · pr · morningtalk ซึ่งอาจเปิด email/password ไว้ · ทุกระบบใช้ JWT secret เดียวกัน ถ้าไม่บังคับข้อนี้ คนที่สมัคร email/password ด้วยอีเมล @jianchatea.com บนระบบอื่นจะเข้าระบบนี้ได้เลยโดยไม่ผ่าน Microsoft · ตั้งเป็น null ถ้าไม่ต้องการบังคับ",
 
+  "allowedEmailsFile": "/etc/jc-auth/allowed-emails.txt",
+  "_allowedEmailsFile": "รายชื่อผู้ใช้ระบบนี้ บรรทัดละอีเมล · ใส่ # เป็นคอมเมนต์ได้ · แก้แล้วมีผลทันทีไม่ต้อง restart (ไม่เตะคนที่ใช้งานอยู่ออก) · ถ้าตั้งไว้แต่อ่านไฟล์ไม่ได้ ระบบจะปฏิเสธทุกคนไว้ก่อน ไม่ปล่อยผ่าน · ลบบรรทัดนี้ทิ้ง = ให้ทุกคนในโดเมนเข้าได้",
+
+  "allowedEmails": [],
+  "_allowedEmails": "รายชื่อเพิ่มเติมที่เขียนตรงนี้ได้เลย · รวมกับไฟล์ด้านบน · แก้แล้วต้อง restart jc-auth",
+
   "port": 9002,
   "host": "127.0.0.1",
   "_host": "ผูกกับ loopback เท่านั้น — บริการนี้ต้องไม่เปิดออกอินเทอร์เน็ต nginx เป็นตัวเดียวที่เรียกได้",

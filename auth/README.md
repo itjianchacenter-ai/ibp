@@ -91,6 +91,23 @@ sudo chown root:root /etc/jc-auth/config.json
 > อยู่ใน `/etc/jc-auth/` เท่านั้น **ห้าม commit ลง git** (`.gitignore` กันไว้แล้ว)
 > ส่วน Project URL เป็นข้อมูลสาธารณะ อยู่ใน `login.html` ได้ตามปกติ
 
+### 3.1 · รายชื่อผู้ใช้ (allowlist)
+
+โดเมนอย่างเดียวหมายความว่า **ทุกคนในองค์กร** เปิด Control Tower ได้ ซึ่งกว้างกว่าที่ควร
+เพราะในนี้มีต้นทุนต่อหน่วยและยอดขายรายเมนู
+
+```bash
+sudo cp /opt/jiancha-forecast/auth/allowed-emails.example.txt /etc/jc-auth/allowed-emails.txt
+sudo nano /etc/jc-auth/allowed-emails.txt     # บรรทัดละอีเมล
+```
+
+* **แก้แล้วมีผลทันที ไม่ต้อง restart** — คนที่กำลังใช้งานอยู่ไม่ถูกเตะออก
+* ตัวใหญ่ตัวเล็กไม่สำคัญ · `#` เป็นคอมเมนต์
+* **ถ้าไฟล์หายหรืออ่านไม่ได้ ระบบปฏิเสธทุกคนไว้ก่อน** (allowlist ที่ปล่อยผ่านตอนพังไม่ใช่ allowlist)
+* ไม่อยากใช้ก็ลบคีย์ `allowedEmailsFile` ออกจาก `config.json` → กลับไปใช้ด่านโดเมนอย่างเดียว
+
+allowlist เป็นด่านที่ **เพิ่มเข้ามา** ไม่ได้แทนที่ด่านอื่น — อยู่ในรายชื่อแต่ไม่ได้ล็อกอินผ่าน Azure ก็ยังเข้าไม่ได้
+
 ```bash
 sudo cp /opt/jiancha-forecast/auth/jc-auth.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -122,7 +139,7 @@ bash /opt/jiancha-forecast/deploy/update.sh
 node /opt/jiancha-forecast/auth/auth_test.js
 ```
 
-58 ข้อ ครอบคลุมการโจมตีที่เกิดขึ้นจริง — `alg:none` · alg confusion · แก้ payload คงลายเซ็นเดิม ·
+67 ข้อ ครอบคลุมการโจมตีที่เกิดขึ้นจริง — `alg:none` · alg confusion · แก้ payload คงลายเซ็นเดิม ·
 **anon key ของ Supabase** (เป็น JWT ที่เซ็นด้วย secret เดียวกันและเปิดเผยต่อสาธารณะ) ·
 **token จากระบบพี่น้องที่ใช้ project เดียวกัน** (สมัคร email/password ด้วยอีเมล `@jianchatea.com`
 บน morningtalk แล้วเอา token มาใช้ที่นี่) · token จาก project อื่น ·
@@ -138,5 +155,12 @@ node /opt/jiancha-forecast/auth/auth_test.js
 * คุกกี้อายุสูงสุด 12 ชม. หรือเท่าอายุ token แล้วแต่อันไหนสั้นกว่า
 * ระบบนี้ตอบว่า *"ใครเข้าได้"* เท่านั้น ยังไม่มีเรื่อง *"ใครทำอะไรได้"* (role/permission)
   ทุกคนที่เข้าได้เห็นทุกโมดูลเท่ากัน · ถ้าต้องการแยกสิทธิ์ต้องทำเพิ่ม
+* **Supabase project นี้ใช้ร่วมกับระบบอื่น** — ในรายการ Redirect URLs มี
+  `morningtalk.jianchatea.com/**` ซึ่งเป็น **wildcard** · Supabase ยอมส่ง token กลับไปที่
+  path ไหนก็ได้บนโฮสต์นั้น ถ้าวันหนึ่งโฮสต์นั้นมี open redirect หรือหน้าที่ผู้ใช้ใส่เนื้อหาเองได้
+  token ของบัญชีจริงจะถูกดักได้ และ token นั้นผ่านทุกด่านของเรา (เพราะมันเป็นของจริง)
+  ด่านที่เราทำกันของปลอมได้หมด แต่กันของจริงที่ถูกขโมยมาไม่ได้ —
+  ควรเปลี่ยน `/**` เป็น path ที่เจาะจง แต่ต้องเช็คกับคนดูแล morningtalk ก่อน
+  ไม่งั้นระบบนั้นล็อกอินไม่ได้
 * ยังไม่กระทบ **R-04** — ชื่อผู้ทบทวนใน Module 02+ ยังเป็นช่องข้อความที่ผู้ใช้พิมพ์เอง
   ตอนนี้มี `/whoami` ให้แล้ว จะต่อยอดให้ดึงอีเมลผู้ล็อกอินมาเติมอัตโนมัติได้

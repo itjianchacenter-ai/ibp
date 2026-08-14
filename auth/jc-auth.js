@@ -61,6 +61,56 @@ function buildVerifier(cfg) {
   const NEED_PROVIDER = cfg.requiredProvider
     ? String(cfg.requiredProvider).trim().toLowerCase() : null;
 
+  /* ── รายชื่อที่อนุญาต (ถ้าตั้งไว้) ────────────────────────────────────
+     โดเมนอย่างเดียวหมายความว่า "ทุกคนในองค์กร" เข้า Control Tower ได้
+     ซึ่งกว้างกว่าที่ควร เพราะในนี้มีต้นทุนต่อหน่วยและยอดขายรายเมนู
+     ตั้ง allowlist แล้วจะเหลือเฉพาะรายชื่อที่ระบุ
+
+     รองรับสองแบบ:
+       allowedEmails      · รายชื่อในไฟล์ config เอง (แก้แล้วต้อง restart)
+       allowedEmailsFile  · ไฟล์ข้อความ บรรทัดละอีเมล (แก้แล้วมีผลทันที)
+     แบบไฟล์มีไว้ให้ทีม IT เพิ่ม-ลดคนได้โดยไม่ต้องแตะ JSON และไม่ต้อง
+     restart service ซึ่งจะทำให้ทุกคนที่ใช้งานอยู่หลุดพร้อมกัน
+
+     ถ้าไม่ตั้งทั้งสองอย่าง = ไม่บังคับ ใช้ด่านโดเมนตามเดิม               */
+  const ALLOW_INLINE = (cfg.allowedEmails || [])
+    .map(function (e) { return String(e).trim().toLowerCase(); }).filter(Boolean);
+  const ALLOW_FILE = cfg.allowedEmailsFile || null;
+  let fileCache = { key: "", set: null };
+
+  function parseList(text) {
+    const s = new Set();
+    String(text).split(/\r?\n/).forEach(function (line) {
+      const v = line.replace(/#.*$/, "").trim().toLowerCase();   /* รองรับคอมเมนต์ */
+      if (v) s.add(v);
+    });
+    return s;
+  }
+  /* คืน null = ไม่ได้ตั้ง allowlist · คืน Set = ต้องอยู่ในนี้เท่านั้น */
+  function allowSet() {
+    if (!ALLOW_FILE) return ALLOW_INLINE.length ? new Set(ALLOW_INLINE) : null;
+    let st;
+    try { st = fs.statSync(ALLOW_FILE); }
+    catch (e) {
+      /* ตั้งไฟล์ไว้แต่อ่านไม่ได้ → ปฏิเสธทุกคน ไม่ใช่ปล่อยผ่าน
+         allowlist ที่ fail-open ไม่ใช่ allowlist                        */
+      process.stderr.write("jc-auth: อ่าน allowedEmailsFile ไม่ได้ (" + ALLOW_FILE +
+                           ") — ปฏิเสธทุกคนไว้ก่อน\n");
+      return new Set();
+    }
+    const key = st.mtimeMs + ":" + st.size;
+    if (fileCache.key !== key) {
+      try {
+        fileCache = { key: key, set: parseList(fs.readFileSync(ALLOW_FILE, "utf8")) };
+      } catch (e) { return new Set(); }
+    }
+    /* รวมกับรายชื่อใน config ถ้ามีทั้งคู่ */
+    if (!ALLOW_INLINE.length) return fileCache.set;
+    const merged = new Set(fileCache.set);
+    ALLOW_INLINE.forEach(function (e) { merged.add(e); });
+    return merged;
+  }
+
   return function verify(token, nowSec) {
     const now = nowSec == null ? Math.floor(Date.now() / 1000) : nowSec;
 
@@ -125,6 +175,11 @@ function buildVerifier(cfg) {
     const domain = email.slice(email.lastIndexOf("@") + 1);
     if (!domain || DOMAINS.indexOf(domain) < 0)
       return { ok: false, why: "โดเมน " + (domain || "(ว่าง)") + " ไม่ได้รับอนุญาต" };
+
+    /* ด่านสุดท้าย — รายชื่อ · ตรวจหลังโดเมนเพื่อให้ข้อความบอกสาเหตุที่ตรงกว่า */
+    const allow = allowSet();
+    if (allow && !allow.has(email))
+      return { ok: false, why: "บัญชี " + email + " ไม่อยู่ในรายชื่อผู้ใช้ระบบนี้" };
 
     return { ok: true, email: email, exp: body.exp, sub: String(body.sub || "") };
   };
