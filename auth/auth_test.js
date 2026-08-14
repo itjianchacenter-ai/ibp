@@ -16,6 +16,7 @@ const CFG = {
   supabaseUrl: "https://proj-abc.supabase.co",
   jwtSecret: "s3cr3t-jwt-signing-key-for-tests-only",
   allowedDomains: ["jianchatea.com"],
+  requiredProvider: "azure",
   cookieName: "jc_ibp_sso",
   clockSkewSec: 60
 };
@@ -43,6 +44,7 @@ function rejects(token, expectWhy, label) {
 const goodBody = {
   iss: ISS, aud: "authenticated", role: "authenticated",
   sub: "u-123", email: "somchai@jianchatea.com",
+  app_metadata: { provider: "azure", providers: ["azure"] },
   iat: NOW - 60, exp: NOW + 3600
 };
 const sign = (b, h, secret) =>
@@ -90,6 +92,34 @@ console.log("\n── anon key ของ Supabase (เปิดเผยต่�
   const svc = sign({ iss: ISS, aud: "authenticated", role: "service_role",
                      email: "x@jianchatea.com", iat: NOW - 60, exp: NOW + 999 });
   rejects(svc, "role", "service_role ถูกปฏิเสธ");
+}
+
+console.log("\n── ระบบอื่นที่ใช้ Supabase project เดียวกัน ──────────────────");
+{
+  /* project นี้ถูกใช้ร่วมกับ hr-huddle · pr.jc-group-global · morningtalk
+     ทุกระบบใช้ JWT secret เดียวกัน token ของระบบอื่นจึง "ลายเซ็นถูกต้อง"
+     ในสายตาเราเสมอ · ด่านที่กันได้จริงคือ provider ไม่ใช่โดเมนอีเมล        */
+  const emailPw = Object.assign({}, goodBody, {
+    app_metadata: { provider: "email", providers: ["email"] }
+  });
+  rejects(sign(emailPw), "azure",
+    "สมัคร email/password ด้วยอีเมล @jianchatea.com บนระบบอื่น → เข้าไม่ได้");
+
+  const google = Object.assign({}, goodBody, {
+    app_metadata: { provider: "google", providers: ["google"] }
+  });
+  rejects(sign(google), "azure", "token จาก provider google ถูกปฏิเสธ");
+
+  const noMeta = Object.assign({}, goodBody); delete noMeta.app_metadata;
+  rejects(sign(noMeta), "azure", "token ที่ไม่มี app_metadata ถูกปฏิเสธ");
+
+  const spoof = Object.assign({}, goodBody, { app_metadata: { provider: "AZURE" } });
+  ok(verify(sign(spoof), NOW).ok, "provider ตัวใหญ่ AZURE ยังผ่าน (เทียบแบบไม่สนตัวพิมพ์)");
+
+  const linked = Object.assign({}, goodBody, {
+    app_metadata: { provider: "email", providers: ["email", "azure"] }
+  });
+  ok(verify(sign(linked), NOW).ok, "บัญชีที่ผูกทั้ง email และ azure ผ่าน (มี azure ในรายการ)");
 }
 
 console.log("\n── project อื่น ─────────────────────────────────────────────");

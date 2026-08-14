@@ -58,6 +58,8 @@ function buildVerifier(cfg) {
   const DOMAINS = (cfg.allowedDomains || []).map(function (d) {
     return String(d).trim().toLowerCase().replace(/^@/, "");
   });
+  const NEED_PROVIDER = cfg.requiredProvider
+    ? String(cfg.requiredProvider).trim().toLowerCase() : null;
 
   return function verify(token, nowSec) {
     const now = nowSec == null ? Math.floor(Date.now() / 1000) : nowSec;
@@ -94,6 +96,27 @@ function buildVerifier(cfg) {
     if (body.iss !== ISS)            return { ok: false, why: "iss ไม่ตรงกับ project นี้" };
     if (body.aud !== "authenticated") return { ok: false, why: "aud ไม่ใช่ authenticated" };
     if (body.role !== "authenticated") return { ok: false, why: "role ไม่ใช่ authenticated" };
+
+    /* ── ต้องมาจาก Entra (azure) เท่านั้น ────────────────────────────────
+       Supabase project นี้ถูกใช้ร่วมกับระบบอื่นอีกหลายตัว (hr-huddle · pr ·
+       morningtalk) ซึ่งอาจเปิด email/password หรือ provider อื่นไว้ใช้งานอยู่
+       ทุกระบบใช้ JWT secret ก้อนเดียวกัน แปลว่า token ที่ระบบอื่นออกให้
+       "ลายเซ็นถูกต้อง" ในสายตาเราด้วย
+
+       ถ้าเช็คแค่โดเมนอีเมล คนที่สมัคร email/password ด้วยอีเมล @jianchatea.com
+       บนระบบอื่น จะได้ token ที่ผ่านด่านเราทันทีโดยไม่เคยผ่าน Microsoft เลย
+
+       ทางแก้ที่ไม่ต้องแตะการตั้งค่าส่วนกลาง (ซึ่งจะทำให้ระบบอื่นพัง):
+       บังคับที่ฝั่งเราว่า token ต้องถูกออกผ่าน provider azure เท่านั้น        */
+    if (NEED_PROVIDER) {
+      const am = body.app_metadata || {};
+      const provider = String(am.provider || "").toLowerCase();
+      const list = Array.isArray(am.providers)
+        ? am.providers.map(function (p) { return String(p).toLowerCase(); }) : [];
+      if (provider !== NEED_PROVIDER && list.indexOf(NEED_PROVIDER) < 0)
+        return { ok: false, why: "ต้องเข้าผ่าน " + NEED_PROVIDER +
+                 " เท่านั้น (token นี้มาจาก " + (provider || "ไม่ระบุ") + ")" };
+    }
 
     const email = String(body.email || "").trim().toLowerCase();
     /* ต้องมี @ และต้องไม่มีช่องว่าง — กันค่าประหลาดที่เล็ดลอดมาจาก IdP */

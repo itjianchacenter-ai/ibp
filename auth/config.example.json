@@ -10,6 +10,9 @@
   "allowedDomains": ["jianchatea.com"],
   "_allowedDomains": "โดเมนอีเมลที่เข้าได้ · ตรวจที่ฝั่ง server จึงเป็นด่านที่ปลอมไม่ได้ · เพิ่มโดเมนได้ถ้าต้องการ",
 
+  "requiredProvider": "azure",
+  "_requiredProvider": "รับเฉพาะ token ที่ออกผ่าน Entra/Azure · จำเป็นเพราะ Supabase project นี้ใช้ร่วมกับ hr-huddle · pr · morningtalk ซึ่งอาจเปิด email/password ไว้ · ทุกระบบใช้ JWT secret เดียวกัน ถ้าไม่บังคับข้อนี้ คนที่สมัคร email/password ด้วยอีเมล @jianchatea.com บนระบบอื่นจะเข้าระบบนี้ได้เลยโดยไม่ผ่าน Microsoft · ตั้งเป็น null ถ้าไม่ต้องการบังคับ",
+
   "port": 9002,
   "host": "127.0.0.1",
   "_host": "ผูกกับ loopback เท่านั้น — บริการนี้ต้องไม่เปิดออกอินเทอร์เน็ต nginx เป็นตัวเดียวที่เรียกได้",

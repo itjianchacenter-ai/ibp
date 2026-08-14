@@ -67,6 +67,14 @@ token กลับมาใน URL fragment แล้วหน้า login ส�
    ถ้าไม่ใส่ Supabase จะปฏิเสธขากลับทั้งหมด
 3. **Project Settings → API** จดไว้ 2 ค่า — **Project URL** และ **JWT Secret**
 
+> **อย่าปิด Email/Password signup ที่ Supabase**
+> project นี้ถูกใช้ร่วมกับระบบอื่นอีกหลายตัว (ดู Redirect URLs — `jiancha-hr-huddle` ·
+> `pr.jc-group-global` · `morningtalk.jianchatea.com`) การปิด provider ส่วนกลาง
+> จะทำให้ระบบเหล่านั้นพังทันที
+>
+> ระบบนี้กันที่ฝั่งตัวเองแทน ด้วย `requiredProvider: "azure"` ใน config —
+> รับเฉพาะ token ที่ออกผ่าน Entra เท่านั้น ไม่ต้องแตะการตั้งค่าส่วนกลางเลย
+
 ### 3 · บน VPS
 
 ```bash
@@ -114,9 +122,11 @@ bash /opt/jiancha-forecast/deploy/update.sh
 node /opt/jiancha-forecast/auth/auth_test.js
 ```
 
-53 ข้อ ครอบคลุมการโจมตีที่เกิดขึ้นจริง — `alg:none` · alg confusion · แก้ payload คงลายเซ็นเดิม ·
+58 ข้อ ครอบคลุมการโจมตีที่เกิดขึ้นจริง — `alg:none` · alg confusion · แก้ payload คงลายเซ็นเดิม ·
 **anon key ของ Supabase** (เป็น JWT ที่เซ็นด้วย secret เดียวกันและเปิดเผยต่อสาธารณะ) ·
-token จาก project อื่น · โดเมนคล้ายกัน (`evil-jianchatea.com` · `jianchatea.com.evil.com`) ·
+**token จากระบบพี่น้องที่ใช้ project เดียวกัน** (สมัคร email/password ด้วยอีเมล `@jianchatea.com`
+บน morningtalk แล้วเอา token มาใช้ที่นี่) · token จาก project อื่น ·
+โดเมนคล้ายกัน (`evil-jianchatea.com` · `jianchatea.com.evil.com`) ·
 อีเมลสองแอต · token หมดอายุ · `nbf`/`iat` ในอนาคต
 
 ## ระวัง
