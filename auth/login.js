@@ -99,8 +99,13 @@
   function start() {
     var back = location.origin + "/login.html" +
                (safeNext() !== "/" ? "?next=" + encodeURIComponent(safeNext()) : "");
+    /* scopes=email จำเป็นสำหรับ Azure — ค่า default ของ Supabase ขอแค่ openid
+       ทำให้ Microsoft ไม่ส่ง claim อีเมลกลับ แล้ว Supabase ตอบ
+       "Error getting user email from external provider" (เจอจริงตอน UAT)
+       คู่มือ Supabase ระบุให้ขอ scope นี้เองสำหรับ provider azure          */
     var url = String(CFG.supabaseUrl).replace(/\/+$/, "") +
       "/auth/v1/authorize?provider=" + encodeURIComponent(CFG.provider || "azure") +
+      "&scopes=" + encodeURIComponent("openid profile email") +
       "&redirect_to=" + encodeURIComponent(back);
     busy(true, "กำลังพาไป Microsoft…");
     location.assign(url);
