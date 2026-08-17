@@ -309,6 +309,47 @@ console.log("\n── ES256 (โหมด JWT Signing Keys — โปรเจ�
   ok(threw, "config ไม่มีทั้ง jwtSecret และ jwtPublicKeys → ล้มตั้งแต่บูต");
 }
 
+console.log("\n── บทบาท (Authorization Matrix v17) ─────────────────────────");
+{
+  const { buildRoles } = require("./jc-auth.js");
+  const fs3 = require("fs"), os3 = require("os"), p3 = require("path");
+  const dir = fs3.mkdtempSync(p3.join(os3.tmpdir(), "jcroles-"));
+  const rf = p3.join(dir, "roles.json");
+
+  fs3.writeFileSync(rf, JSON.stringify({
+    "_comment": "ต้องถูกข้าม",
+    "somchai@jianchatea.com": "DP",
+    "suda@jianchatea.com": ["MKT", "FIN"],
+    "MiXeD@JianChaTea.com": "sp",
+    "evil@jianchatea.com": "DP\"><script>",
+    "admin@jianchatea.com": "ADMIN"
+  }));
+  const rolesFor = buildRoles({ rolesFile: rf });
+
+  ok(rolesFor("somchai@jianchatea.com") === "DP", "อีเมลในไฟล์ได้ทีมตรง");
+  ok(rolesFor("suda@jianchatea.com") === "MKT,FIN", "หลายทีมคั่นด้วยจุลภาค");
+  ok(rolesFor("mixed@jianchatea.com") === "SP", "อีเมล/ทีมตัวพิมพ์ปนกันถูก normalize");
+  ok(rolesFor("nobody@jianchatea.com") === "VIEW", "คนนอกไฟล์ได้ VIEW (สิทธิ์น้อยสุด)");
+  ok(rolesFor("evil@jianchatea.com") === "VIEW",
+     "บทบาทที่มีอักขระอันตรายถูกทิ้ง → ตกเป็น VIEW ไม่ใช่หลุดลง HTML");
+  ok(rolesFor("admin@jianchatea.com") === "ADMIN", "ADMIN ผ่านได้ (อยู่ในชุดตัวอักษรที่อนุญาต)");
+
+  /* hot reload — แก้ไฟล์แล้วมีผลทันที */
+  fs3.writeFileSync(rf, JSON.stringify({ "somchai@jianchatea.com": "SP" }));
+  ok(rolesFor("somchai@jianchatea.com") === "SP", "ย้ายทีมในไฟล์มีผลทันที (ไม่ต้อง restart)");
+  /* ไฟล์พังกลางทาง — ใช้ชุดล่าสุดที่อ่านได้ ไม่ใช่เด้งทุกคนเป็น VIEW */
+  fs3.writeFileSync(rf, "{ พัง json");
+  ok(rolesFor("somchai@jianchatea.com") === "SP", "ไฟล์พังกลางทาง → ใช้ชุดเดิม ไม่เด้งเป็น VIEW");
+  /* ไม่ตั้ง rolesFile เลย */
+  const noFile = buildRoles({});
+  ok(noFile("somchai@jianchatea.com") === "VIEW", "ไม่ตั้ง rolesFile → ทุกคน VIEW");
+  /* defaultRole ที่ผิดรูปต้องไม่ถูกใช้ */
+  const badDef = buildRoles({ defaultRole: "X\"><b>" });
+  ok(badDef("x@y.com") === "VIEW", "defaultRole ผิดรูป → ตกกลับ VIEW");
+
+  fs3.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ══ ทดสอบระดับ HTTP ═══════════════════════════════════════════════════ */
 console.log("\n── HTTP · /verify /session /logout ──────────────────────────");
 
@@ -335,6 +376,7 @@ srv.listen(0, "127.0.0.1", function () {
     req({ path: "/verify", method: "GET", headers: { Cookie: "jc_ibp_sso=" + live } }, null, function (res2) {
       ok(res2.statusCode === 204, "/verify คุกกี้ถูกต้อง → 204");
       ok(res2.headers["x-auth-email"] === "somchai@jianchatea.com", "/verify ส่งอีเมลกลับให้ nginx บันทึก");
+      ok(res2.headers["x-auth-role"] === "VIEW", "/verify ส่งบทบาทกลับ (ไม่มี roles.json → VIEW)");
 
       req({ path: "/verify", method: "GET", headers: { Cookie: "jc_ibp_sso=" + live + "x" } }, null, function (res3) {
         ok(res3.statusCode === 401, "/verify คุกกี้ถูกแก้ 1 ตัวอักษร → 401");

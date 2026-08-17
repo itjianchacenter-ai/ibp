@@ -94,8 +94,10 @@ function scope(css, prefix) {
 /* ── 3 · JS ที่ fc ต้องใช้ ────────────────────────────────────────────
    store.js  — v15 ไม่มี ต้องเอาไปด้วย (persistence R-04)
    forecast.js — ตัวโมดูล ประกาศ global นอก IIFE แค่ FCROWS
+   authz.js — จัดสิทธิ์หน้าจอตาม Authorization Matrix v17 (อ่านบทบาทจาก
+              div ที่ nginx ฉีด · ไม่มี div = ไม่ทำอะไร จึงไม่กระทบ dev/test)
    ไม่เอา data.js / core.js / i18n เพราะ v15 มีของตัวเองอยู่แล้ว          */
-const JS = ["assets/js/store.js", "assets/js/forecast.js"];
+const JS = ["assets/js/store.js", "assets/js/forecast.js", "assets/js/authz.js"];
 
 /* ── แก้บั๊กของ v15 ตอนประกอบ ─────────────────────────────────────────
    แก้ที่นี่ ไม่แก้ vendor/ เพื่อให้เทียบกับต้นฉบับได้ตลอดและถอดออกได้ทันที

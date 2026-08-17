@@ -230,6 +230,54 @@ function buildVerifier(cfg) {
   };
 }
 
+/* ══ บทบาทตาม Authorization Matrix v17 ═════════════════════════════════
+   rolesFile: JSON { "email": "DP" | ["MKT","FIN"], "_คอมเมนต์": "..." }
+   hot-reload แบบเดียวกับ allowlist (ดู mtime+size) — เพิ่มคน/ย้ายทีม
+   มีผลทันทีโดยไม่เตะคนที่ใช้งานอยู่ออก
+   คนที่ไม่อยู่ในไฟล์ได้ defaultRole (ค่าตั้งต้น VIEW = เห็นทุกโมดูล
+   แก้อะไรไม่ได้ — ตามหลักข้อ 3 ของเอกสาร: สิทธิ์น้อยสุดเท่าที่ทำงานได้)
+
+   ค่าบทบาทถูกส่งเป็น header ให้ nginx แล้วถูกฉีดลง HTML จึงบังคับ
+   ชุดตัวอักษร [A-Z0-9_-] ต่อบทบาท — ค่าผิดรูปถูกทิ้ง ไม่ใช่ปล่อยผ่าน   */
+function buildRoles(cfg) {
+  const ROLES_FILE   = cfg.rolesFile || null;
+  const DEFAULT_ROLE = (/^[A-Z0-9_-]{1,24}$/.test(String(cfg.defaultRole || "").toUpperCase()))
+    ? String(cfg.defaultRole).toUpperCase() : "VIEW";
+  let cache = { key: "", map: {} };
+
+  function map() {
+    if (!ROLES_FILE) return {};
+    let st;
+    try { st = fs.statSync(ROLES_FILE); } catch (e) { return cache.map; }
+    const key = st.mtimeMs + ":" + st.size;
+    if (cache.key !== key) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(ROLES_FILE, "utf8"));
+        const m = {};
+        Object.keys(raw).forEach(function (em) {
+          if (em.charAt(0) === "_") return;               /* คีย์คอมเมนต์ */
+          const v = Array.isArray(raw[em]) ? raw[em] : [raw[em]];
+          const ok = v.map(function (r) { return String(r).trim().toUpperCase(); })
+                      .filter(function (r) { return /^[A-Z0-9_-]{1,24}$/.test(r); });
+          if (ok.length) m[String(em).trim().toLowerCase()] = ok;
+        });
+        cache = { key: key, map: m };
+      } catch (e) {
+        /* ไฟล์พังกลางทาง — ใช้ชุดที่อ่านได้ล่าสุดต่อไป ดีกว่าทุกคนหลุดเป็น VIEW
+           (ต่างจาก allowlist ที่ต้อง fail-closed เพราะนั่นคือด่านเข้า
+           ส่วนนี้เป็นแค่ระดับสิทธิ์ภายในของคนที่ผ่านด่านแล้ว)             */
+        process.stderr.write("jc-auth: อ่าน rolesFile ไม่ได้ — ใช้ชุดเดิมไปก่อน (" + e.message + ")\n");
+      }
+    }
+    return cache.map;
+  }
+
+  return function rolesFor(email) {
+    const hit = map()[email];
+    return (hit && hit.length) ? hit.join(",") : DEFAULT_ROLE;
+  };
+}
+
 /* ตัวช่วยสร้าง token — ใช้ในชุดทดสอบเท่านั้น ไม่ได้ใช้ตอนรันจริง */
 function signHS256(headObj, bodyObj, secret) {
   const h = b64uEncode(Buffer.from(JSON.stringify(headObj), "utf8"));
@@ -242,6 +290,7 @@ function signHS256(headObj, bodyObj, secret) {
 /* ══ เซิร์ฟเวอร์ ═══════════════════════════════════════════════════════ */
 function createServer(cfg) {
   const verify = buildVerifier(cfg);
+  const rolesFor = buildRoles(cfg);
   const COOKIE = cfg.cookieName || "jc_ibp_sso";
   const MAXAGE = cfg.cookieMaxAgeSec || 43200;
 
@@ -280,6 +329,7 @@ function createServer(cfg) {
       const v = verify(readCookie(req));
       if (v.ok) {
         res.setHeader("X-Auth-Email", v.email);   /* ให้ nginx เก็บลง access log */
+        res.setHeader("X-Auth-Role", rolesFor(v.email));  /* nginx ฉีดลงหน้าให้ UI จัดสิทธิ์ */
         res.writeHead(204).end();
       } else {
         res.writeHead(401).end();
@@ -320,7 +370,8 @@ function createServer(cfg) {
     if (url === "/whoami") {
       const v = verify(readCookie(req));
       res.writeHead(v.ok ? 200 : 401, { "Content-Type": "application/json; charset=utf-8" })
-         .end(JSON.stringify(v.ok ? { email: v.email } : { error: "ยังไม่ได้เข้าสู่ระบบ" }));
+         .end(JSON.stringify(v.ok ? { email: v.email, role: rolesFor(v.email) }
+                                  : { error: "ยังไม่ได้เข้าสู่ระบบ" }));
       return;
     }
 
@@ -365,4 +416,5 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildVerifier: buildVerifier, createServer: createServer, signHS256: signHS256 };
+module.exports = { buildVerifier: buildVerifier, buildRoles: buildRoles,
+                   createServer: createServer, signHS256: signHS256 };
