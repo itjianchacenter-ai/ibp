@@ -309,11 +309,12 @@ function createServer(cfg) {
       .find(function (s) { return s.indexOf(COOKIE + "=") === 0; });
     return hit ? hit.slice(COOKIE.length + 1) : "";
   }
-  function readBody(req, cb) {
+  function readBody(req, cb, maxBytes) {
+    const cap = maxBytes || 8192;                /* token ปกติ < 2KB */
     let n = 0; const chunks = [];
     req.on("data", function (c) {
       n += c.length;
-      if (n > 8192) { req.destroy(); return; }   /* token ปกติ < 2KB */
+      if (n > cap) { req.destroy(); return; }
       chunks.push(c);
     });
     req.on("end", function () { cb(Buffer.concat(chunks).toString("utf8")); });
@@ -363,6 +364,113 @@ function createServer(cfg) {
       setCookie(res, "", 0);
       if (v.ok) log("ออกจากระบบ: " + v.email);
       res.writeHead(303, { Location: "/login.html?bye=1" }).end();
+      return;
+    }
+
+    /* ══ เมนูจัดการสิทธิ์ · /authz/roles ═══════════════════════════════
+       ด่านจริงอยู่ที่นี่ ไม่ใช่ที่หน้าเว็บ — ต้องถือคุกกี้ที่ตรวจผ่านแล้ว
+       "และ" บทบาทต้องมี ADMIN เท่านั้น · แก้แล้วมีผลทันทีเพราะ buildRoles
+       hot-reload ตาม mtime อยู่แล้ว                                        */
+    if (url === "/authz/roles") {
+      const ROLES_PATH = cfg.rolesFile || null;
+      const ROLE_SET = ["MKT","SALES","DP","SP","PROC","RND","OPS","FIN","IT","EXEC","ADMIN","VIEW"];
+      const v = verify(readCookie(req));
+      if (!v.ok) { res.writeHead(401).end(); return; }
+      const myRoles = rolesFor(v.email).split(",");
+      if (myRoles.indexOf("ADMIN") < 0) {
+        log("authz ปฏิเสธ (ไม่ใช่ ADMIN): " + v.email);
+        res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" })
+           .end(JSON.stringify({ error: "ต้องเป็น ADMIN เท่านั้น" }));
+        return;
+      }
+      if (!ROLES_PATH) {
+        res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" })
+           .end(JSON.stringify({ error: "ยังไม่ได้ตั้ง rolesFile ใน config" }));
+        return;
+      }
+      /* กัน CSRF อีกชั้นนอกเหนือ SameSite=Lax: ถ้าเบราว์เซอร์ส่ง Origin มา
+         ต้องตรงกับ host ของเราเท่านั้น (nginx ส่ง Host/Origin จริงมาให้) */
+      const org = req.headers.origin;
+      if (org) {
+        const host = String(req.headers.host || "").split(",")[0].trim();
+        let ohost = ""; try { ohost = new (require("url").URL)(org).host; } catch (e) { /* ว่าง */ }
+        if (!host || ohost !== host) {
+          log("authz ปฏิเสธ (Origin ไม่ตรง): " + org + " ≠ " + host);
+          res.writeHead(403).end(); return;
+        }
+      }
+
+      function readMapRaw() {
+        try { return JSON.parse(fs.readFileSync(ROLES_PATH, "utf8")); }
+        catch (e) { return {}; }
+      }
+
+      if (req.method === "GET") {
+        const raw = readMapRaw(); const map = {};
+        Object.keys(raw).forEach(function (k) {
+          if (k.charAt(0) === "_") return;
+          map[k] = Array.isArray(raw[k]) ? raw[k] : [raw[k]];
+        });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" })
+           .end(JSON.stringify({ me: v.email, teams: ROLE_SET, map: map,
+                                 defaultRole: "VIEW" }));
+        return;
+      }
+
+      if (req.method === "POST") {
+        readBody(req, function (body) {
+          let incoming;
+          try { incoming = JSON.parse(body || "{}").map; } catch (e) { incoming = null; }
+          if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
+               .end(JSON.stringify({ error: "รูปแบบไม่ถูกต้อง — ต้องเป็น {map:{อีเมล:[ทีม]}}" }));
+            return;
+          }
+          const emails = Object.keys(incoming);
+          if (emails.length > 1000) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
+               .end(JSON.stringify({ error: "รายการเกิน 1000 คน" })); return;
+          }
+          const clean = {}; let err = null; let adminCount = 0;
+          emails.forEach(function (em) {
+            if (err) return;
+            const e2 = String(em).trim().toLowerCase();
+            if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+$/.test(e2)) { err = "อีเมลไม่ถูกต้อง: " + em; return; }
+            const arr = (Array.isArray(incoming[em]) ? incoming[em] : [incoming[em]])
+              .map(function (r) { return String(r).trim().toUpperCase(); }).filter(Boolean);
+            if (!arr.length) { err = "ไม่มีทีมให้ " + e2; return; }
+            const bad = arr.find(function (r) { return ROLE_SET.indexOf(r) < 0; });
+            if (bad) { err = "ไม่รู้จักทีม \"" + bad + "\" ของ " + e2; return; }
+            if (arr.indexOf("ADMIN") >= 0) adminCount++;
+            clean[e2] = arr;
+          });
+          if (!err && adminCount === 0)
+            err = "ต้องเหลือ ADMIN อย่างน้อย 1 คน — ไม่งั้นจะไม่มีใครเข้าเมนูนี้ได้อีก";
+          if (err) {
+            res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
+               .end(JSON.stringify({ error: err }));
+            return;
+          }
+          /* เก็บคีย์คอมเมนต์ (_) เดิมไว้ · สำรองของเก่าเป็น .bak ก่อนทับ */
+          const prev = readMapRaw(); const out = {};
+          Object.keys(prev).forEach(function (k) { if (k.charAt(0) === "_") out[k] = prev[k]; });
+          Object.keys(clean).sort().forEach(function (k) { out[k] = clean[k]; });
+          try {
+            try { fs.copyFileSync(ROLES_PATH, ROLES_PATH + ".bak"); } catch (e) { /* ครั้งแรกยังไม่มีไฟล์ */ }
+            fs.writeFileSync(ROLES_PATH, JSON.stringify(out, null, 2));
+          } catch (e) {
+            log("authz เขียน roles.json ไม่ได้: " + e.message);
+            res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" })
+               .end(JSON.stringify({ error: "เขียนไฟล์ไม่สำเร็จ: " + e.message }));
+            return;
+          }
+          log("authz อัปเดตสิทธิ์โดย " + v.email + " · " + Object.keys(clean).length + " รายการ");
+          res.writeHead(204).end();
+        }, 262144);   /* รายชื่อทั้งองค์กร ~1000 คน < 256KB */
+        return;
+      }
+
+      res.writeHead(405).end();
       return;
     }
 

@@ -353,6 +353,86 @@ console.log("\n── บทบาท (Authorization Matrix v17) ─────
 /* ══ ทดสอบระดับ HTTP ═══════════════════════════════════════════════════ */
 console.log("\n── HTTP · /verify /session /logout ──────────────────────────");
 
+/* ══ เมนูจัดการสิทธิ์ · /authz/roles — ด่านอยู่ฝั่ง server ══════════════ */
+function adminApiTests(done) {
+  console.log("\n── /authz/roles (เมนูจัดการสิทธิ์) ──────────────────────────");
+  const fsA = require("fs"), osA = require("os"), pA = require("path");
+  const dir = fsA.mkdtempSync(pA.join(osA.tmpdir(), "jcadmin-"));
+  const rf = pA.join(dir, "roles.json");
+  fsA.writeFileSync(rf, JSON.stringify({
+    "_note": "คีย์คอมเมนต์ต้องรอดหลังบันทึก",
+    "boss@jianchatea.com": "ADMIN",
+    "dp1@jianchatea.com": "DP"
+  }));
+  const cfg2 = Object.assign({}, CFG, { rolesFile: rf });
+  const srv2 = createServer(cfg2);
+
+  const now = Math.floor(Date.now() / 1000);
+  const mk = (em) => signHS256({ alg: "HS256", typ: "JWT" },
+    Object.assign({}, goodBody, { email: em, iat: now - 10, exp: now + 3600 }), CFG.jwtSecret);
+  const bossC = "jc_ibp_sso=" + mk("boss@jianchatea.com");
+  const dpC   = "jc_ibp_sso=" + mk("dp1@jianchatea.com");
+
+  srv2.listen(0, "127.0.0.1", function () {
+    const port = srv2.address().port;
+    function req2(opts, body, cb) {
+      const r = http.request(Object.assign({ host: "127.0.0.1", port: port }, opts), function (res) {
+        let d = ""; res.on("data", c => d += c); res.on("end", () => cb(res, d));
+      });
+      if (body) r.write(body); r.end();
+    }
+    const HDR = (cookie, extra) => Object.assign(
+      { Cookie: cookie, "Content-Type": "application/json", Host: "127.0.0.1:" + port }, extra || {});
+
+    req2({ path: "/authz/roles", method: "GET" }, null, (r1) => {
+      ok(r1.statusCode === 401, "GET ไม่มีคุกกี้ → 401");
+      req2({ path: "/authz/roles", method: "GET", headers: HDR(dpC) }, null, (r2, b2) => {
+        ok(r2.statusCode === 403 && /ADMIN/.test(b2), "GET โดยทีม DP → 403 (ไม่ใช่ ADMIN)");
+        req2({ path: "/authz/roles", method: "GET", headers: HDR(bossC) }, null, (r3, b3) => {
+          const d3 = JSON.parse(b3 || "{}");
+          ok(r3.statusCode === 200 && d3.map && d3.map["dp1@jianchatea.com"], "GET โดย ADMIN → เห็นรายการครบ");
+          ok((d3.teams || []).length === 12, "รายชื่อทีมครบ 10 + ADMIN + VIEW");
+
+          const post = (payload, headers, cb) =>
+            req2({ path: "/authz/roles", method: "POST", headers: headers }, JSON.stringify(payload), cb);
+
+          post({ map: { "dp1@jianchatea.com": ["SP"] } }, HDR(dpC), (r4) => {
+            ok(r4.statusCode === 403, "POST โดยทีม DP → 403");
+            post({ map: { "boss@jianchatea.com": ["ADMIN"], "x y@bad": ["DP"] } }, HDR(bossC), (r5, b5) => {
+              ok(r5.statusCode === 400 && /อีเมล/.test(b5), "POST อีเมลผิดรูป → 400");
+              post({ map: { "boss@jianchatea.com": ["ADMIN"], "a@b.com": ["HACKER"] } }, HDR(bossC), (r6, b6) => {
+                ok(r6.statusCode === 400 && /ไม่รู้จักทีม/.test(b6), "POST ทีมนอกสารบบ → 400");
+                post({ map: { "dp1@jianchatea.com": ["DP"] } }, HDR(bossC), (r7, b7) => {
+                  ok(r7.statusCode === 400 && /ADMIN อย่างน้อย 1/.test(b7), "POST ที่ทำให้ ADMIN หมดระบบ → 400");
+                  post({ map: { "boss@jianchatea.com": ["ADMIN"], "dp1@jianchatea.com": ["SP", "PROC"] } },
+                       HDR(bossC, { Origin: "https://evil.example" }), (r8) => {
+                    ok(r8.statusCode === 403, "POST ที่ Origin ไม่ตรง host → 403 (กัน CSRF)");
+                    post({ map: { "boss@jianchatea.com": ["ADMIN"], "dp1@jianchatea.com": ["SP", "PROC"] } },
+                         HDR(bossC, { Origin: "http://127.0.0.1:" + port }), (r9) => {
+                      ok(r9.statusCode === 204, "POST ถูกต้อง (Origin ตรง) → 204");
+                      const saved = JSON.parse(fsA.readFileSync(rf, "utf8"));
+                      ok(saved["dp1@jianchatea.com"].join(",") === "SP,PROC", "ไฟล์ถูกเขียนตามที่ส่ง");
+                      ok(saved["_note"] === "คีย์คอมเมนต์ต้องรอดหลังบันทึก", "คีย์คอมเมนต์เดิมไม่หาย");
+                      ok(fsA.existsSync(rf + ".bak"), "มีสำเนา .bak ของชุดก่อนหน้า");
+                      /* hot reload — คำขอถัดไปเห็นบทบาทใหม่ทันที */
+                      req2({ path: "/whoami", method: "GET", headers: HDR(dpC) }, null, (r10, b10) => {
+                        ok(/SP,PROC/.test(b10), "บทบาทใหม่มีผลทันทีกับคำขอถัดไป (hot reload)");
+                        srv2.close();
+                        fsA.rmSync(dir, { recursive: true, force: true });
+                        done();
+                      });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
 const srv = createServer(CFG);
 srv.listen(0, "127.0.0.1", function () {
   const port = srv.address().port;
@@ -415,9 +495,11 @@ srv.listen(0, "127.0.0.1", function () {
                 ok(res7.statusCode === 404, "/session ด้วย GET ไม่ทำงาน (ต้อง POST)");
 
                 srv.close();
-                console.log("\n──────────────────────────────────────────────────────────────────");
-                if (fail) { console.log("ไม่ผ่าน " + fail + " ข้อ · ผ่าน " + pass + " ข้อ"); process.exit(1); }
-                console.log("ผ่านทั้งหมด " + pass + " ข้อ");
+                adminApiTests(function () {
+                  console.log("\n──────────────────────────────────────────────────────────────────");
+                  if (fail) { console.log("ไม่ผ่าน " + fail + " ข้อ · ผ่าน " + pass + " ข้อ"); process.exit(1); }
+                  console.log("ผ่านทั้งหมด " + pass + " ข้อ");
+                });
               });
             });
           });

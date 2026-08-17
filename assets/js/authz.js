@@ -106,6 +106,23 @@
       .toUpperCase().split(",").map(function (s) { return s.trim(); }).filter(Boolean);
     if (!roles.length) roles = ["VIEW"];
 
+    /* ADMIN เห็นทางเข้าเมนูจัดการสิทธิ์บนแถบผู้ใช้ (div ถัดจาก jcAuthz
+       ตามลำดับที่ nginx ฉีด) — คนอื่นเปิด /admin.html ตรงก็เจอ 403 จาก API
+       อยู่ดี ลิงก์นี้เป็นแค่ทางลัด ไม่ใช่ด่าน                              */
+    if (roles.indexOf("ADMIN") >= 0) {
+      var chip = tag.nextElementSibling;
+      if (chip && !chip.querySelector('a[href="/admin.html"]')) {
+        var sep = document.createTextNode("  ·  ");
+        var a = document.createElement("a");
+        a.href = "/admin.html";
+        a.textContent = "จัดการสิทธิ์";
+        a.style.cssText = "color:#AD9C82;text-decoration:none;font-weight:600";
+        var out = chip.querySelector('a[href="/logout"]');
+        if (out) { chip.insertBefore(a, out); chip.insertBefore(sep, out); }
+        else { chip.appendChild(sep); chip.appendChild(a); }
+      }
+    }
+
     var lockedSections = [];
     Object.keys(MATRIX).forEach(function (id) {
       var sec = document.getElementById(id);

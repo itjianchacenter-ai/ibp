@@ -82,6 +82,8 @@ rsync -a --delete "$MERGED/js/" "$WEB/js/"          # สคริปต์แ�
 rsync -a --delete "$SRC/samples/" "$WEB/samples/"   # ไฟล์ตัวอย่างสำหรับ UAT
 rsync -a "$SRC/auth/login.html" "$WEB/"             # หน้า SSO — nginx ยกเว้นจาก auth_request
 rsync -a "$SRC/auth/login.js"   "$WEB/"
+rsync -a "$SRC/auth/admin.html" "$WEB/"             # เมนูจัดการสิทธิ์ (ADMIN เท่านั้น — jc-auth ตรวจ)
+rsync -a "$SRC/auth/admin.js"   "$WEB/"
 
 # ทางถอย: เก็บรุ่นแยกไฟล์ (Module 02+ อย่างเดียว 9 โมดูล) ไว้ที่ /m02p/
 # ถ้าตัวรวมมีปัญหาบน production ยังเปิดใช้ตัวนี้ได้ทันทีโดยไม่ต้อง deploy ใหม่

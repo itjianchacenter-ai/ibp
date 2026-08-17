@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>จัดการสิทธิ์ · JIAN CHA IBP Control Tower</title>
+<style>
+:root{
+  --jc-ink:#1C1A17; --jc-ink-2:#2B2824; --jc-grey:#6E695F; --jc-grey-2:#948E82;
+  --jc-cream:#F1EDE4; --jc-paper:#FCFAF5; --jc-sand:#EAE4D8; --jc-taupe:#D8D1C3;
+  --jc-gold:#AD9C82; --pos:#8A9A6B; --neg:#B96A55;
+  --font:"Sukhumvit Set","Sukhumvit","IBM Plex Sans Thai","Noto Sans Thai",-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--jc-cream);color:var(--jc-ink);font-size:14px;line-height:1.55;padding:2rem 1rem}
+.wrap{max-width:880px;margin:0 auto}
+.card{background:var(--jc-paper);border-top:4px solid var(--jc-gold);border-radius:4px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:1.8rem 2rem;margin-bottom:1rem}
+h1{font-size:20px;font-weight:700}
+.sub{color:var(--jc-grey);font-size:13px;margin:.3rem 0 0}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.me{font-size:12px;color:var(--jc-grey);text-align:right}
+.me b{color:var(--jc-ink)}
+.msg{display:none;padding:.7rem .9rem;border-radius:3px;font-size:13px;margin:1rem 0 0}
+.msg.show{display:block}
+.msg.err{background:#F7E9E5;border:1px solid var(--neg);color:#7d3f30}
+.msg.ok{background:#EDF1E4;border:1px solid var(--pos);color:#4d5c34}
+.msg.info{background:var(--jc-sand);border:1px solid var(--jc-taupe);color:var(--jc-ink-2)}
+table{width:100%;border-collapse:collapse;margin-top:1.2rem}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--jc-grey-2);text-align:left;padding:.4rem .5rem;border-bottom:2px solid var(--jc-taupe)}
+td{padding:.55rem .5rem;border-bottom:1px solid var(--jc-sand);vertical-align:top}
+td.email{font-size:13px;word-break:break-all;min-width:200px}
+input.email{width:100%;padding:.45em .6em;border:1px solid var(--jc-taupe);border-radius:3px;font-family:var(--font);font-size:13px;background:#fff}
+input.email:focus{outline:2px solid var(--jc-gold);outline-offset:-1px}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem}
+.chip{font-size:11px;letter-spacing:.03em;padding:.28em .6em;border:1px solid var(--jc-taupe);border-radius:999px;background:#fff;color:var(--jc-grey);cursor:pointer;user-select:none;font-family:var(--font)}
+.chip.on{background:var(--jc-ink);border-color:var(--jc-ink);color:#fff}
+.chip.on.admin{background:var(--neg);border-color:var(--neg)}
+.rm{border:0;background:none;color:var(--jc-grey-2);cursor:pointer;font-size:16px;line-height:1;padding:.2em .4em}
+.rm:hover{color:var(--neg)}
+.bar{display:flex;gap:.6rem;margin-top:1.3rem;flex-wrap:wrap;align-items:center}
+button.btn{border:1px solid var(--jc-ink);background:var(--jc-ink);color:#fff;border-radius:3px;padding:.6em 1.2em;font-size:13px;font-family:var(--font);font-weight:600;cursor:pointer;transition:.15s}
+button.btn:hover:not(:disabled){background:transparent;color:var(--jc-ink)}
+button.btn.gold{background:var(--jc-gold);border-color:var(--jc-gold);color:var(--jc-ink)}
+button.btn.ghost{background:transparent;color:var(--jc-ink)}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+.note{font-size:12px;color:var(--jc-grey);line-height:1.8;margin-top:1rem}
+.note code{background:var(--jc-sand);padding:.1em .4em;border-radius:2px;font-size:11px}
+a.back{font-size:12px;color:var(--jc-gold);text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="top">
+      <div>
+        <h1>จัดการสิทธิ์ผู้ใช้งาน</h1>
+        <p class="sub">Authorization Matrix v17 · จับคู่บัญชี → ทีม · มีผลทันทีเมื่อบันทึก</p>
+      </div>
+      <div class="me">
+        <div>ผู้ดูแล: <b id="me">…</b></div>
+        <a class="back" href="/">← กลับ Control Tower</a>
+      </div>
+    </div>
+
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+    <table>
+      <thead><tr><th style="width:34%">บัญชี (อีเมล)</th><th>ทีม / บทบาท</th><th style="width:36px"></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <div class="bar">
+      <button class="btn ghost" id="add" type="button">+ เพิ่มผู้ใช้</button>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="reload" type="button">โหลดใหม่</button>
+      <button class="btn gold" id="save" type="button">บันทึก · มีผลทันที</button>
+    </div>
+
+    <p class="note">
+      คนที่<b>ไม่อยู่ในรายการนี้</b>จะได้ <code>VIEW</code> อัตโนมัติ — เห็นทุกโมดูล แก้อะไรไม่ได้ ·
+      หนึ่งคนเลือกได้หลายทีม ระบบใช้สิทธิ์ที่กว้างสุดต่อโมดูล ·
+      <code>ADMIN</code> เห็นและแก้ได้ทุกโมดูลรวมหน้านี้ — ระบบบังคับให้เหลืออย่างน้อย 1 คนเสมอ ·
+      สิทธิ์รายโมดูลของแต่ละทีมเป็นไปตามชีท <b>01 Authorization Matrix</b> ของเอกสารที่อนุมัติแล้ว
+    </p>
+  </div>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>

@@ -43,8 +43,14 @@ RestrictNamespaces=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
-# อ่านได้อย่างเดียว ไม่ต้องเขียนอะไรลงดิสก์เลย
+# อ่านได้อย่างเดียว — ยกเว้น roles.json ที่เมนูจัดการสิทธิ์ (/authz/roles)
+# ต้องเขียนได้ · systemd ให้ path ที่เจาะจงกว่าชนะ จึงเปิดแคบสุดแค่ไฟล์เดียว
+# (ไฟล์ต้องเป็น group www-data และ chmod 660 ด้วย)
+# "-" นำหน้า = ไฟล์ยังไม่มีก็ start ได้ (ครั้งแรกยังไม่มี .bak)
+# ไฟล์ทั้งคู่ต้องถูก touch + chmod 660 + chgrp www-data ไว้ล่วงหน้า เพราะ
+# ไดเรกทอรีเป็น read-only การ "สร้างไฟล์ใหม่" ทำไม่ได้ ทำได้แค่ "เขียนทับ"
 ReadOnlyPaths=/opt/jiancha-forecast/auth /etc/jc-auth
+ReadWritePaths=-/etc/jc-auth/roles.json -/etc/jc-auth/roles.json.bak
 
 StandardOutput=journal
 StandardError=journal
