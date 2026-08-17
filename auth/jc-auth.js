@@ -451,12 +451,17 @@ function createServer(cfg) {
                .end(JSON.stringify({ error: err }));
             return;
           }
-          /* เก็บคีย์คอมเมนต์ (_) เดิมไว้ · สำรองของเก่าเป็น .bak ก่อนทับ */
+          /* เก็บคีย์คอมเมนต์ (_) เดิมไว้ · สำรองของเก่าเป็น .bak ก่อนทับ
+             ห้ามใช้ copyFileSync — libuv จะ fchmod ปลายทางให้ mode ตรงต้นฉบับ
+             แต่ไฟล์เป็นของ root และเรารันเป็น www-data → EPERM ทั้งที่สิทธิ์
+             "เขียน" มีจริง (เจอจริงตอนทดสอบใน namespace ของ service บน droplet)
+             read+write ธรรมดาเปิดแบบ O_TRUNC ไม่แตะ mode จึงผ่าน            */
           const prev = readMapRaw(); const out = {};
           Object.keys(prev).forEach(function (k) { if (k.charAt(0) === "_") out[k] = prev[k]; });
           Object.keys(clean).sort().forEach(function (k) { out[k] = clean[k]; });
           try {
-            try { fs.copyFileSync(ROLES_PATH, ROLES_PATH + ".bak"); } catch (e) { /* ครั้งแรกยังไม่มีไฟล์ */ }
+            try { fs.writeFileSync(ROLES_PATH + ".bak", fs.readFileSync(ROLES_PATH)); }
+            catch (e) { /* ครั้งแรกยังไม่มีไฟล์เดิมให้สำรอง */ }
             fs.writeFileSync(ROLES_PATH, JSON.stringify(out, null, 2));
           } catch (e) {
             log("authz เขียน roles.json ไม่ได้: " + e.message);
