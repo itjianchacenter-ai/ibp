@@ -367,6 +367,120 @@ function createServer(cfg) {
       return;
     }
 
+    /* ══ ชั้นเก็บข้อมูลส่วนกลาง · /api/state/<key> ═══════════════════════
+       "ทุกคนเห็นชุดเดียวกัน" สำหรับ Promotion (pm) · NPD Schedule (sch) ·
+       Stock 03+ (cov) — เก็บเป็นไฟล์บน server หลัง SSO
+
+       นี่คือจุดที่การบังคับสิทธิ์ตาม Authorization Matrix เกิดขึ้น
+       "ฝั่ง server จริง ๆ" เป็นครั้งแรก (UI gating เป็นแค่ความเรียบร้อย):
+       ตารางชีท 01 แถว promo/sched/m3b ถูกถอดเป็นกติกา อ่าน/เขียน ต่อทีม
+         เขียนได้ = P/E/U ในตาราง · อ่านได้ = ทุกช่องที่ไม่ใช่ "-"
+         ADMIN อ่าน+เขียนได้หมด · VIEW อ่านได้หมด เขียนไม่ได้
+       ใครไม่มีสิทธิ์ ต่อให้ประดิษฐ์ request เองก็ได้ 403 จากที่นี่          */
+    if (url.indexOf("/api/state") === 0) {
+      const STATE_DIR = cfg.stateDir || "/var/lib/jc-auth/state";
+      /* จากชีท 01: promo=PCCC-CCA-V · sched=EVCECPC--V · m3b=--CPC-VCCV */
+      const KEYS = {
+        pm:  { max: 2 * 1024 * 1024, write: ["MKT"],
+               noRead: ["PROC", "IT"] },
+        sch: { max: 2 * 1024 * 1024, write: ["MKT", "SP", "RND"],
+               noRead: ["FIN", "IT"] },
+        cov: { max: 8 * 1024 * 1024, write: ["SP"],
+               noRead: ["MKT", "SALES", "RND"] }
+      };
+      const v = verify(readCookie(req));
+      if (!v.ok) { res.writeHead(401).end(); return; }
+      const roles = rolesFor(v.email).split(",");
+      const isAdmin = roles.indexOf("ADMIN") >= 0;
+
+      function canRead(k) {
+        if (isAdmin || roles.indexOf("VIEW") >= 0) return true;
+        return roles.some(function (r) { return KEYS[k].noRead.indexOf(r) < 0; });
+      }
+      function canWrite(k) {
+        if (isAdmin) return true;
+        return roles.some(function (r) { return KEYS[k].write.indexOf(r) >= 0; });
+      }
+      function fileOf(k) { return STATE_DIR + "/" + k + ".json"; }
+      function readState(k) {
+        try { return JSON.parse(fs.readFileSync(fileOf(k), "utf8")); }
+        catch (e) { return { version: 0, savedBy: null, savedAt: null, data: null }; }
+      }
+      function json(res, code, obj) {
+        res.writeHead(code, { "Content-Type": "application/json; charset=utf-8",
+                              "Cache-Control": "no-store" })
+           .end(JSON.stringify(obj));
+      }
+
+      /* GET /api/state — เวอร์ชันของทุกชุด (ไว้ให้หน้าเว็บ poll ว่ามีของใหม่ไหม) */
+      if (url === "/api/state" && req.method === "GET") {
+        const outMeta = {};
+        Object.keys(KEYS).forEach(function (k) {
+          if (!canRead(k)) return;
+          const s = readState(k);
+          outMeta[k] = { version: s.version, savedBy: s.savedBy, savedAt: s.savedAt };
+        });
+        json(res, 200, outMeta); return;
+      }
+
+      const m = url.match(/^\/api\/state\/(pm|sch|cov)$/);
+      if (!m) { res.writeHead(404).end(); return; }
+      const key = m[1];
+
+      if (req.method === "GET") {
+        if (!canRead(key)) {
+          log("state ปฏิเสธอ่าน " + key + ": " + v.email + " (" + roles.join() + ")");
+          json(res, 403, { error: "ทีมของคุณไม่มีสิทธิ์อ่านชุดข้อมูลนี้" }); return;
+        }
+        json(res, 200, readState(key)); return;
+      }
+
+      if (req.method === "POST") {
+        if (!canWrite(key)) {
+          log("state ปฏิเสธเขียน " + key + ": " + v.email + " (" + roles.join() + ")");
+          json(res, 403, { error: "ทีมของคุณดูชุดข้อมูลนี้ได้อย่างเดียว — ผู้แก้ได้: " +
+                           (KEYS[key].write.join(", ")) + " (ตามชีท 01)" }); return;
+        }
+        /* กัน CSRF แบบเดียวกับ /authz/roles */
+        const org = req.headers.origin;
+        if (org) {
+          const host = String(req.headers.host || "").split(",")[0].trim();
+          let oh = ""; try { oh = new (require("url").URL)(org).host; } catch (e) { /* ว่าง */ }
+          if (!host || oh !== host) { res.writeHead(403).end(); return; }
+        }
+        readBody(req, function (raw) {
+          let body;
+          try { body = JSON.parse(raw || "{}"); } catch (e) { body = null; }
+          if (!body || body.data == null) { json(res, 400, { error: "ต้องมี data" }); return; }
+          const cur = readState(key);
+          /* optimistic lock — สองคนแก้ชนกัน คนหลังต้องรู้ ไม่ใช่ทับเงียบ ๆ */
+          if ((body.baseVersion | 0) !== cur.version) {
+            json(res, 409, { error: "มีคนบันทึกชุดใหม่กว่าไปแล้ว", version: cur.version,
+                             savedBy: cur.savedBy, savedAt: cur.savedAt }); return;
+          }
+          const next = { version: cur.version + 1, savedBy: v.email,
+                         savedAt: new Date().toISOString(), data: body.data };
+          try {
+            fs.mkdirSync(STATE_DIR, { recursive: true });
+            const tmp = fileOf(key) + ".tmp";
+            fs.writeFileSync(tmp, JSON.stringify(next));
+            fs.renameSync(tmp, fileOf(key));           /* สลับทั้งไฟล์ ไม่มีครึ่ง ๆ กลาง ๆ */
+            /* audit ตามชีท 06: ทุกการแก้ไขบันทึกขึ้นส่วนกลาง ตรวจย้อนหลังได้ */
+            fs.appendFileSync(STATE_DIR + "/audit.jsonl",
+              JSON.stringify({ t: next.savedAt, key: key, by: v.email,
+                               ver: next.version, bytes: raw.length }) + "\n");
+          } catch (e) {
+            log("state เขียน " + key + " ไม่ได้: " + e.message);
+            json(res, 500, { error: "เขียนไม่สำเร็จ: " + e.message }); return;
+          }
+          log("state บันทึก " + key + " v" + next.version + " โดย " + v.email);
+          json(res, 200, { version: next.version }); return;
+        }, KEYS[key].max);
+        return;
+      }
+      res.writeHead(405).end(); return;
+    }
+
     /* ══ เมนูจัดการสิทธิ์ · /authz/roles ═══════════════════════════════
        ด่านจริงอยู่ที่นี่ ไม่ใช่ที่หน้าเว็บ — ต้องถือคุกกี้ที่ตรวจผ่านแล้ว
        "และ" บทบาทต้องมี ADMIN เท่านั้น · แก้แล้วมีผลทันทีเพราะ buildRoles

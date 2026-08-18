@@ -51,6 +51,9 @@ SystemCallArchitectures=native
 # ไดเรกทอรีเป็น read-only การ "สร้างไฟล์ใหม่" ทำไม่ได้ ทำได้แค่ "เขียนทับ"
 ReadOnlyPaths=/opt/jiancha-forecast/auth /etc/jc-auth
 ReadWritePaths=-/etc/jc-auth/roles.json -/etc/jc-auth/roles.json.bak
+# ชั้นข้อมูลส่วนกลาง /api/state — systemd สร้าง /var/lib/jc-auth ให้เอง
+# เป็นของ user ของ service และเขียนได้แม้ ProtectSystem=strict
+StateDirectory=jc-auth
 
 StandardOutput=journal
 StandardError=journal

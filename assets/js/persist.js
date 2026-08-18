@@ -1,111 +1,181 @@
 /* ══════════════════════════════════════════════════════════════════════
-   PERSIST · เก็บงานของ Promotion (2+++) · NPD Schedule (2++) · Stock (03+)
-   ให้รอดข้ามการรีเฟรช — แบบเดียวกับที่ Module 02+ ได้จาก store.js (R-04)
+   PERSIST · Promotion (2+++) · NPD Schedule (2++) · Stock 03+ (cov)
+   เก็บ "ส่วนกลางบน server" — ทุกคนเห็นชุดเดียวกัน + สำรองบนเครื่องเป็น cache
    ──────────────────────────────────────────────────────────────────────
-   ปัญหาที่แก้ (เจอจาก UAT): เพิ่มโปร/แผน NPD/อัปโหลดสต๊อกแล้วรีเฟรช
-   ข้อมูลหาย — เพราะโมดูลสาย vendor เกิดเป็น artifact ที่ตั้งใจให้เก็บผ่าน
-   "บันทึก .json" + SharePoint ซึ่งตอนนี้ปิดด้วย CSP (NFR-02) โดยตั้งใจ
+   เส้นทางข้อมูล
+     เปิดหน้า  → GET /api/state/<key> (ผ่าน SSO cookie เดิม)
+                 ส่วนกลางมีของ (version>0) → ใช้ส่วนกลาง
+                 ส่วนกลางว่าง/อ่านไม่ได้     → ใช้สำเนาบนเครื่อง (ถ้ามี)
+     แก้ข้อมูล → debounce → เขียนเครื่อง (cache) + POST ส่วนกลางพร้อม
+                 baseVersion — server ตอบ 409 ถ้ามีคนบันทึกไปก่อน
+                 (ป้ายเตือนขึ้น ไม่ทับกันเงียบ ๆ)
+     ทุก 60 วิ → GET /api/state เทียบ version — มีของใหม่จากคนอื่น
+                 ขึ้นป้ายชวนรีเฟรช
 
-   วิธี: ใช้ STORE (ชั้นเก็บถาวรเดิม มี fallback/quota ครบ) เก็บสถานะไว้
-   บนเครื่องผู้ใช้ แล้วกู้ตอนเปิดหน้า
+   ใครเขียนได้ ใครอ่านได้ ตัดสินที่ server ตามชีท 01 (ดู jc-auth /api/state)
+   ฝั่งนี้แค่แสดงผลลัพธ์ — ผู้ใช้ที่ถูกล็อกอ่านอย่างเดียวกดแก้ไม่ได้อยู่แล้ว
+   จาก authz.js จึงไม่มี POST ให้ถูกปฏิเสธเป็นปกติวิสัย
 
-   ทำไมไม่ wrap ฟังก์ชัน mutator ตรง ๆ: ปุ่มของโมดูลถูกผูกด้วย
-   addEventListener ตั้งแต่ init — listener ถือ "ตัวฟังก์ชันเดิม" ไว้แล้ว
-   การทับ window.pmSaveRow ภายหลังจึงไม่ถูกเรียกผ่านเส้นทางปุ่มจริง
-   จึงใช้วิธีเฝ้าระดับเอกสารแทน: ทุก click/change → debounce → เทียบ
-   ลายเซ็นสถานะ → เปลี่ยนจริงค่อยเขียน (idle ไม่เขียนอะไรเลย)
-
-   ขอบเขตที่ต้องรู้:
-   · เก็บ "บนเครื่องนั้น" คนละเครื่องคนละชุด — ชุดกลางของทีมยังเป็น
-     Export/.json ตามเดิม จนกว่าจะทำ SharePoint (เฟส 2)
-   · ของ 03+ เก็บ stock+aging เท่ากับที่ปุ่ม "บันทึก .json" ของโมดูลเก็บเอง
-     (ช่องงวดข้อมูล 5 ช่องไม่อยู่ในไฟล์ฟอร์แมตนั้น — ความละเอียดเท่าต้นฉบับ)
-   · ผู้ใช้ที่โมดูลถูกล็อกอ่านอย่างเดียว (authz) กดแก้ไม่ได้อยู่แล้ว
-     จึงไม่มีทางเขียนทับข้อมูลบนเครื่องตัวเองโดยไม่ตั้งใจ
+   เปิดจากดิสก์ตรง ๆ / รุ่นแยกไฟล์ (ไม่มีโมดูลพวกนี้) → ถอยเป็นเครื่องล้วน
    ══════════════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
 
   function boot() {
-    if (typeof STORE === "undefined") return;          /* ไม่มีชั้นเก็บ = ไม่ทำอะไร */
+    if (typeof STORE === "undefined") return;
     var hasPM  = (typeof PM  !== "undefined") && (typeof pmRender  === "function");
     var hasSCH = (typeof SCH !== "undefined") && (typeof schRender === "function");
     var hasCOV = (typeof COV !== "undefined") && (typeof covJsonIn === "function");
-    if (!hasPM && !hasSCH && !hasCOV) return;          /* หน้าอื่น (เช่นรุ่นแยกไฟล์) */
+    if (!hasPM && !hasSCH && !hasCOV) return;
 
-    var restoring = true;                              /* กันบันทึกวนระหว่างกู้ */
+    var KEYS = [];
+    if (hasPM)  KEYS.push("pm");
+    if (hasSCH) KEYS.push("sch");
+    if (hasCOV) KEYS.push("cov");
+    var ver = { pm: 0, sch: 0, cov: 0 };        /* เวอร์ชันส่วนกลางที่เครื่องนี้รู้จักล่าสุด */
+    var central = false;                          /* ต่อส่วนกลางติดไหม */
+    var conflict = {};                            /* คีย์ที่ค้างชนกันอยู่ */
+    var restoring = true;
 
-    /* ── กู้ ─────────────────────────────────────────────────────────── */
-    try {
-      if (hasPM) {
-        var pm = STORE.get("pm.rows", null);
-        if (Array.isArray(pm) && pm.length) { window.PM = pm; pmRender(); }
+    /* ── ป้ายแจ้งมุมซ้ายล่าง (ฝั่งตรงข้ามแถบผู้ใช้) ────────────────────── */
+    function toast(html, sticky) {
+      var el = document.getElementById("jcSyncNote");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "jcSyncNote";
+        el.style.cssText = "position:fixed;bottom:14px;left:14px;z-index:2147483000;" +
+          "background:#1C1A17;color:#F1EDE4;padding:8px 14px;border-radius:6px;" +
+          "font-size:12px;font-family:inherit;line-height:1.6;max-width:340px;" +
+          "box-shadow:0 4px 14px rgba(0,0,0,.28);opacity:.95";
+        /* ลิงก์ javascript: โดน CSP บล็อก — ใช้ delegate จริงแทน */
+        el.addEventListener("click", function (ev) {
+          var a = ev.target && ev.target.closest ? ev.target.closest("[data-reload]") : null;
+          if (a) { ev.preventDefault(); location.reload(); }
+        });
+        document.body.appendChild(el);
       }
-      if (hasSCH) {
-        var sch = STORE.get("sch.rows", null);
-        if (Array.isArray(sch) && sch.length) { window.SCH = sch; schRender(); }
-      }
-      if (hasCOV) {
-        var cov = STORE.get("cov.pack", null);
-        if (cov && Array.isArray(cov.stock) && cov.stock.length) {
-          covJsonIn(JSON.stringify(cov));
-          var st = document.getElementById("covStat");
-          if (st) st.innerHTML += " · <b>กู้คืนอัตโนมัติจากเครื่องนี้</b> (บันทึกเมื่อ " + (cov.saved || "-") + ")";
-        }
-      }
-    } catch (e) {
-      /* กู้พังห้ามลากทั้งหน้าตาย — ข้อมูลตั้งต้นของโมดูลยังอยู่ */
-      if (window.console) console.warn("persist: กู้คืนไม่สำเร็จ", e);
+      el.innerHTML = html;
+      el.style.display = "block";
+      if (!sticky) setTimeout(function () { el.style.display = "none"; }, 6000);
     }
-    restoring = false;
 
-    /* ── ลายเซ็นสถานะ — เขียนเฉพาะตอนเปลี่ยนจริง ───────────────────── */
-    var sigPM = hasPM ? JSON.stringify(PM) : "";
-    var sigSCH = hasSCH ? JSON.stringify(SCH) : "";
-    var lastCovCalc = hasCOV ? COV.calc : null;        /* covCompute สร้าง object ใหม่ทุกครั้ง */
+    function applyData(key, data) {
+      try {
+        if (key === "pm" && Array.isArray(data)) { window.PM = data; pmRender(); }
+        if (key === "sch" && Array.isArray(data)) { window.SCH = data; schRender(); }
+        if (key === "cov" && data && Array.isArray(data.stock) && data.stock.length)
+          covJsonIn(JSON.stringify(data));
+      } catch (e) { if (window.console) console.warn("persist: apply " + key, e); }
+    }
+    function snapshot(key) {
+      if (key === "pm") return PM;
+      if (key === "sch") return SCH;
+      /* cov เก็บเฉพาะตอนเป็นชุดอัปโหลด — baseline ไม่มีประโยชน์ที่จะแชร์ */
+      if (key === "cov")
+        return (COV.calc && (COV.calc.meta || {}).basis === "upload")
+          ? { app: "JIANCHA_STOCK_ONHAND", v: 1, stock: DATA.stock, aging: DATA.aging }
+          : null;
+      return null;
+    }
+
+    /* ── กู้: ส่วนกลางก่อน · เครื่องเป็นสำรอง ───────────────────────────── */
+    var pend = KEYS.length;
+    KEYS.forEach(function (key) {
+      fetch("/api/state/" + key, { credentials: "same-origin" })
+        .then(function (r) { central = true; return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (s) {
+          if (s && s.version > 0 && s.data != null) {
+            ver[key] = s.version;
+            applyData(key, s.data);
+            STORE.set(key + ".cache", s);         /* สำเนาไว้ใช้ยามส่วนกลางล่ม */
+          } else if (s == null && !central) {
+            var loc = STORE.get(key + ".cache", null);
+            if (loc && loc.data != null) { applyData(key, loc.data); ver[key] = loc.version || 0; }
+          }
+          if (--pend === 0) {
+            restoring = false;
+            seedSigs();
+            if (central) {
+              var got = KEYS.filter(function (k) { return ver[k] > 0; });
+              if (got.length) toast("⟳ ดึงชุดข้อมูลส่วนกลางแล้ว: " + got.join(" · "));
+            } else {
+              toast("⚠ ต่อชั้นข้อมูลส่วนกลางไม่ได้ — ใช้สำเนาบนเครื่องไปก่อน", true);
+            }
+          }
+        });
+    });
+
+    /* ── บันทึกเมื่อเปลี่ยนจริง ──────────────────────────────────────────── */
+    var sig = {};
+    function calcSig(key) { var s = snapshot(key); return s == null ? "" : JSON.stringify(s); }
+    function seedSigs() { KEYS.forEach(function (k) { sig[k] = calcSig(k); }); }
+
+    function push(key, body) {
+      fetch("/api/state/" + key, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ baseVersion: ver[key], data: body })
+      }).then(function (r) {
+        if (r.status === 200) return r.json().then(function (j) {
+          ver[key] = j.version; conflict[key] = false;
+          STORE.set(key + ".cache", { version: j.version, data: body });
+        });
+        if (r.status === 409) return r.json().then(function (j) {
+          conflict[key] = true;
+          toast("⚠ <b>" + key + "</b>: " + (j.savedBy || "ผู้ใช้อื่น") +
+                " บันทึกชุดใหม่กว่าไปแล้ว (v" + j.version + ")<br>" +
+                "ของคุณยังอยู่บนจอ — <b>Export เก็บไว้ก่อน แล้วรีเฟรช</b>เพื่อดึงชุดล่าสุดมารวมเอง", true);
+        });
+        if (r.status === 403) return r.json().catch(function(){return {};}).then(function (j) {
+          toast("⚠ " + (j.error || "ไม่มีสิทธิ์บันทึกชุดนี้"), true);
+        });
+      }).catch(function () { /* ออฟไลน์ — สำเนาเครื่องมีแล้ว เดี๋ยว interaction หน้าค่อยลองใหม่ */ });
+    }
 
     function saveIfChanged() {
       if (restoring) return;
-      try {
-        if (hasPM) {
-          var s1 = JSON.stringify(PM);
-          if (s1 !== sigPM) { sigPM = s1; STORE.set("pm.rows", PM); }
+      KEYS.forEach(function (key) {
+        var s = calcSig(key);
+        if (s === sig[key]) return;
+        sig[key] = s;
+        var snap = snapshot(key);
+        if (snap == null) {                      /* cov กลับ baseline = ล้างของเครื่อง (ส่วนกลางให้คนมีสิทธิ์ตัดสินใจเอง) */
+          STORE.del(key + ".cache");
+          return;
         }
-        if (hasSCH) {
-          var s2 = JSON.stringify(SCH);
-          if (s2 !== sigSCH) { sigSCH = s2; STORE.set("sch.rows", SCH); }
-        }
-        if (hasCOV && COV.calc !== lastCovCalc) {
-          lastCovCalc = COV.calc;
-          var basis = (COV.calc && COV.calc.meta || {}).basis;
-          if (basis === "upload") {
-            /* ฟอร์แมตเดียวกับปุ่ม "บันทึก .json" ของโมดูล — covJsonIn อ่านกลับได้ตรง ๆ */
-            STORE.set("cov.pack", { app: "JIANCHA_STOCK_ONHAND", v: 1,
-              saved: new Date().toISOString().slice(0, 16).replace("T", " "),
-              stock: DATA.stock, aging: DATA.aging });
-          } else {
-            STORE.del("cov.pack");                     /* กดคืนค่าตั้งต้น = ลืมชุดที่เก็บไว้ */
-          }
-        }
-      } catch (e) { /* โควตาเต็ม ฯลฯ — STORE จัดการ fallback เองแล้ว */ }
+        STORE.set(key + ".cache", { version: ver[key], data: snap });
+        if (central && !conflict[key]) push(key, snap);
+      });
     }
 
-    var timer = null;
-    function poke() {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(function () { timer = null; saveIfChanged(); }, 600);
-    }
+    var t = null;
+    function poke() { if (t) clearTimeout(t); t = setTimeout(function () { t = null; saveIfChanged(); }, 600); }
     document.addEventListener("click", poke, true);
     document.addEventListener("change", poke, true);
-    /* กันเคสปิดแท็บเร็วกว่า debounce */
     window.addEventListener("beforeunload", saveIfChanged);
+
+    /* ── มีของใหม่จากคนอื่นไหม (poll เบา ๆ ทุก 60 วิ) ─────────────────── */
+    if (window.setInterval) setInterval(function () {
+      if (!central) return;
+      fetch("/api/state", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (meta) {
+          if (!meta) return;
+          var newer = KEYS.filter(function (k) {
+            return meta[k] && meta[k].version > ver[k] && !conflict[k];
+          });
+          if (newer.length)
+            toast("⟳ มีชุดข้อมูลใหม่จาก " + (meta[newer[0]].savedBy || "ผู้ใช้อื่น") +
+                  " (" + newer.join(" · ") + ") — <a href=\"#\" data-reload " +
+                  "style=\"color:#AD9C82;font-weight:600\">รีเฟรชเพื่อดึงมาใช้</a>", true);
+        }).catch(function () { /* เงียบ */ });
+    }, 60000);
   }
 
   if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", function () {
-      /* ให้ init ของทุกโมดูล (schInit เซ็ต SCH=schSeed() ฯลฯ) เสร็จก่อนค่อยกู้ทับ */
-      setTimeout(boot, 0);
-    });
+    window.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 0); });
   } else {
     setTimeout(boot, 0);
   }

@@ -419,6 +419,77 @@ function adminApiTests(done) {
                         ok(/SP,PROC/.test(b10), "บทบาทใหม่มีผลทันทีกับคำขอถัดไป (hot reload)");
                         srv2.close();
                         fsA.rmSync(dir, { recursive: true, force: true });
+                        stateApiTests(done);
+                      });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
+/* ══ ชั้นข้อมูลส่วนกลาง · /api/state — สิทธิ์ตัดสินที่ server ══════════ */
+function stateApiTests(done) {
+  console.log("\n── /api/state (ชั้นข้อมูลส่วนกลาง) ──────────────────────────");
+  const fsS = require("fs"), osS = require("os"), pS = require("path");
+  const dir = fsS.mkdtempSync(pS.join(osS.tmpdir(), "jcstate-"));
+  const rf = pS.join(dir, "roles.json");
+  fsS.writeFileSync(rf, JSON.stringify({
+    "mkt@jianchatea.com": "MKT", "sp@jianchatea.com": "SP",
+    "proc@jianchatea.com": "PROC", "boss@jianchatea.com": "ADMIN"
+  }));
+  const cfgS = Object.assign({}, CFG, { rolesFile: rf, stateDir: pS.join(dir, "state") });
+  const srvS = createServer(cfgS);
+  const now = Math.floor(Date.now() / 1000);
+  const mk = (em) => "jc_ibp_sso=" + signHS256({ alg: "HS256", typ: "JWT" },
+    Object.assign({}, goodBody, { email: em, iat: now - 10, exp: now + 3600 }), CFG.jwtSecret);
+  const C = { mkt: mk("mkt@jianchatea.com"), sp: mk("sp@jianchatea.com"),
+              proc: mk("proc@jianchatea.com"), boss: mk("boss@jianchatea.com"),
+              view: mk("nobody@jianchatea.com") };
+
+  srvS.listen(0, "127.0.0.1", function () {
+    const port = srvS.address().port;
+    function req3(method, path, cookie, body, cb) {
+      const hdr = { Cookie: cookie, "Content-Type": "application/json", Host: "127.0.0.1:" + port };
+      const r = http.request({ host: "127.0.0.1", port: port, path: path, method: method, headers: hdr },
+        function (res) { let d = ""; res.on("data", c => d += c); res.on("end", () => cb(res.statusCode, d)); });
+      if (body) r.write(JSON.stringify(body)); r.end();
+    }
+
+    req3("GET", "/api/state/pm", "", null, (s0) => {
+      ok(s0 === 401, "GET ไม่มีคุกกี้ → 401");
+      req3("POST", "/api/state/pm", C.mkt, { baseVersion: 0, data: [{ id: "p1", n: "โปร A" }] }, (s1, b1) => {
+        ok(s1 === 200 && JSON.parse(b1).version === 1, "MKT (P ใน promo) เขียน pm ได้ → v1");
+        req3("POST", "/api/state/pm", C.sp, { baseVersion: 1, data: [] }, (s2, b2) => {
+          ok(s2 === 403 && /อย่างเดียว/.test(b2), "SP เขียน pm ไม่ได้ (ตาราง=C) → 403");
+          req3("POST", "/api/state/cov", C.sp, { baseVersion: 0, data: { stock: [1] } }, (s3) => {
+            ok(s3 === 200, "SP (P ใน 03+) เขียน cov ได้");
+            req3("GET", "/api/state/cov", C.mkt, null, (s4) => {
+              ok(s4 === 403, "MKT อ่าน cov ไม่ได้ (ตาราง='-') → 403");
+              req3("GET", "/api/state/pm", C.proc, null, (s5) => {
+                ok(s5 === 403, "PROC อ่าน pm ไม่ได้ (ตาราง='-') → 403");
+                req3("GET", "/api/state/pm", C.view, null, (s6, b6) => {
+                  ok(s6 === 200 && JSON.parse(b6).savedBy === "mkt@jianchatea.com",
+                     "VIEW อ่าน pm ได้ พร้อมรู้ว่าใครบันทึก");
+                  req3("POST", "/api/state/pm", C.view, { baseVersion: 1, data: [] }, (s7) => {
+                    ok(s7 === 403, "VIEW เขียนไม่ได้ทุกชุด → 403");
+                    /* optimistic lock: baseVersion เก่า = 409 ไม่ทับเงียบ */
+                    req3("POST", "/api/state/pm", C.mkt, { baseVersion: 0, data: [{ id: "px" }] }, (s8, b8) => {
+                      ok(s8 === 409 && /ใหม่กว่า/.test(b8), "เขียนทับด้วย baseVersion เก่า → 409 (กันชนกัน)");
+                      req3("GET", "/api/state", C.boss, null, (s9, b9) => {
+                        const meta = JSON.parse(b9);
+                        ok(s9 === 200 && meta.pm.version === 1 && meta.cov.version === 1,
+                           "ADMIN เห็น meta ครบทุกชุด (ไว้ poll ของใหม่)");
+                        const audit = fsS.readFileSync(pS.join(dir, "state", "audit.jsonl"), "utf8").trim().split("\n");
+                        ok(audit.length === 2 && /mkt@jianchatea.com/.test(audit[0]),
+                           "audit log บันทึกครบทุกการเขียน (ชีท 06)");
+                        srvS.close();
+                        fsS.rmSync(dir, { recursive: true, force: true });
                         done();
                       });
                     });
