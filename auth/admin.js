@@ -42,12 +42,33 @@
   }
   function clearMsg() { msgEl.className = "msg"; }
 
-  /* ── หนึ่งแถว = อีเมล + ชิปทีม + ปุ่ม ⚙ ช่องติ๊กรายโมดูล ─────────────── */
+  /* ── หนึ่งแถว = อีเมล + ชิปทีมที่เลือกแล้ว + ปุ่มเพิ่มทีม + ปุ่มกำหนดเอง ──
+     ชิปโชว์เฉพาะทีมที่เลือก (ถอดด้วย ×) — ไม่กางตัวเลือกทั้ง 12 ค้างทุกแถว
+     แผงติ๊กรายโมดูลเป็น popup กลางจอ พร้อมบอกว่า "ตามทีม" ของคนนี้
+     แปลว่าได้สิทธิ์อะไรจริงในแต่ละโมดูล                                    */
+  function teamClassFor(teams, modRow) {
+    if (teams.indexOf("ADMIN") >= 0) return "edit";
+    var best = "hide", any = false;
+    teams.forEach(function (t) {
+      var ti = TEAMS10.indexOf(t);
+      if (ti < 0) return;
+      any = true;
+      var c = modRow.charAt(ti);
+      if (c === "P" || c === "E" || c === "U") best = "edit";
+      else if (c !== "-" && best !== "edit") best = "read";
+    });
+    if (!any) return "read";                    /* ไม่มีทีม = VIEW ดูได้หมด */
+    return best;
+  }
+  var CLS_TH = { edit: "แก้ได้", read: "ดูอย่างเดียว", hide: "มองไม่เห็น" };
+
   function row(email, roles, ovr) {
     var tr = document.createElement("tr");
-    var overrides = {};                          /* {mod: "-"|"V"|"E"} ของแถวนี้ */
+    var teams = (roles || []).filter(function (t) { return t !== "VIEW"; });
+    var overrides = {};
     Object.keys(ovr || {}).forEach(function (m) { overrides[m] = ovr[m]; });
     tr._overrides = overrides;
+    tr._teams = teams;
 
     var tdE = document.createElement("td");
     tdE.className = "email";
@@ -59,71 +80,64 @@
     tr.appendChild(tdE);
 
     var tdC = document.createElement("td");
-    var chips = document.createElement("div");
-    chips.className = "chips";
-    TEAMS.forEach(function (t) {
-      var c = document.createElement("span");
-      c.className = "chip" + ((roles || []).indexOf(t) >= 0 ? " on" : "") +
-                    (t === "ADMIN" ? " admin" : "");
-      c.textContent = t;
-      c.setAttribute("data-team", t);
-      c.onclick = function () { c.classList.toggle("on"); clearMsg(); };
-      chips.appendChild(c);
-    });
-    tdC.appendChild(chips);
+    var sel = document.createElement("div");          /* ชิปทีมที่เลือกแล้ว */
+    var ctrls = document.createElement("div");
+    ctrls.style.cssText = "display:flex;gap:.4rem;flex-wrap:wrap;align-items:center";
+    var addBtn = document.createElement("button");
+    addBtn.type = "button"; addBtn.className = "mini"; addBtn.textContent = "+ ทีม";
+    var gear = document.createElement("button");
+    gear.type = "button"; gear.className = "mini";
+    var picker = document.createElement("div");
+    picker.className = "picker"; picker.style.display = "none";
 
-    /* ปุ่มเปิดช่องติ๊ก + แผงรายโมดูล */
-    var ovBtn = document.createElement("button");
-    ovBtn.type = "button";
-    ovBtn.className = "chip";
-    ovBtn.style.marginTop = ".45rem";
-    var panel = document.createElement("div");
-    panel.style.cssText = "display:none;margin-top:.6rem;padding:.6rem .8rem;" +
-      "background:var(--jc-sand);border:1px solid var(--jc-taupe);border-radius:3px";
-    function ovLabel() {
-      var n = Object.keys(overrides).length;
-      ovBtn.textContent = "⚙ ติ๊กรายโมดูล" + (n ? " · ทับ " + n + " โมดูล" : "");
-      ovBtn.style.background = n ? "#AD9C82" : "";
-      ovBtn.style.color = n ? "#1C1A17" : "";
-      ovBtn.style.borderColor = n ? "#AD9C82" : "";
-    }
-    function buildPanel() {
-      panel.innerHTML = "";
-      var head = document.createElement("div");
-      head.style.cssText = "font-size:11px;color:var(--jc-grey);margin-bottom:.4rem;line-height:1.6";
-      head.textContent = "ค่าที่ติ๊กทับตารางทีมเฉพาะโมดูลนั้น (บังคับทั้งหน้าจอและ server) · “ตามทีม” = ใช้ตารางชีท 01 ปกติ";
-      panel.appendChild(head);
-      MOD.forEach(function (m) {
-        var line = document.createElement("div");
-        line.style.cssText = "display:flex;align-items:center;gap:.35rem;padding:.18rem 0;font-size:12px";
-        var lab = document.createElement("span");
-        lab.textContent = m[1];
-        lab.style.cssText = "flex:1;min-width:0";
-        line.appendChild(lab);
-        OV_CHOICES.forEach(function (ch) {
-          var b = document.createElement("span");
-          var active = (overrides[m[0]] || "") === ch[0];
-          b.className = "chip" + (active ? " on" : "");
-          b.textContent = ch[1];
-          b.style.fontSize = "10px";
-          b.onclick = function () {
-            if (ch[0] === "") delete overrides[m[0]];
-            else overrides[m[0]] = ch[0];
-            buildPanel(); ovLabel(); clearMsg();
-          };
-          line.appendChild(b);
-        });
-        panel.appendChild(line);
+    function drawSel() {
+      sel.innerHTML = "";
+      if (!teams.length) {
+        var v = document.createElement("span");
+        v.style.cssText = "font-size:11px;color:var(--jc-grey-2)";
+        v.textContent = "ยังไม่มีทีม — ได้ VIEW (ดูทุกโมดูล แก้ไม่ได้)";
+        sel.appendChild(v);
+      }
+      teams.forEach(function (t) {
+        var c = document.createElement("span");
+        c.className = "selchip" + (t === "ADMIN" ? " admin" : "");
+        c.innerHTML = t + " <b title=\"เอาทีมนี้ออก\">×</b>";
+        c.querySelector("b").onclick = function () {
+          teams.splice(teams.indexOf(t), 1); drawSel(); drawPicker(); clearMsg();
+        };
+        sel.appendChild(c);
       });
+      var n = Object.keys(overrides).length;
+      gear.textContent = n ? ("⚙ กำหนดเอง · " + n) : "⚙ กำหนดเอง";
+      gear.className = "mini" + (n ? " has" : "");
     }
-    ovBtn.onclick = function () {
-      var open = panel.style.display !== "none";
-      panel.style.display = open ? "none" : "block";
-      if (!open) buildPanel();
+    function drawPicker() {
+      picker.innerHTML = "";
+      TEAMS.filter(function (t) { return t !== "VIEW" && teams.indexOf(t) < 0; })
+        .forEach(function (t) {
+          var c = document.createElement("span");
+          c.className = "chip" + (t === "ADMIN" ? " admin" : "");
+          c.style.margin = "0 .25rem .25rem 0";
+          c.textContent = t;
+          c.onclick = function () {
+            teams.push(t); picker.style.display = "none";
+            drawSel(); clearMsg();
+          };
+          picker.appendChild(c);
+        });
+      if (!picker.children.length) picker.innerHTML =
+        '<span style="font-size:11px;color:var(--jc-grey)">เลือกครบทุกทีมแล้ว</span>';
+    }
+    addBtn.onclick = function () {
+      var open = picker.style.display !== "none";
+      drawPicker();
+      picker.style.display = open ? "none" : "block";
     };
-    ovLabel();
-    tdC.appendChild(ovBtn);
-    tdC.appendChild(panel);
+    gear.onclick = function () { openOvModal(tr, inp.value.trim() || "(ยังไม่ใส่อีเมล)", drawSel); };
+
+    ctrls.appendChild(addBtn); ctrls.appendChild(gear);
+    tdC.appendChild(sel); tdC.appendChild(ctrls); tdC.appendChild(picker);
+    drawSel();
     tr.appendChild(tdC);
 
     var tdR = document.createElement("td");
@@ -136,13 +150,56 @@
     return tr;
   }
 
+  /* ── popup ติ๊กรายโมดูล — ตัวเดียวใช้ร่วมทุกแถว ─────────────────────── */
+  function openOvModal(tr, title, onChange) {
+    var bg = document.getElementById("ovbg");
+    document.getElementById("ovTitle").textContent = title;
+    var list = document.getElementById("ovList");
+    function draw() {
+      list.innerHTML = "";
+      MOD.forEach(function (m) {
+        var line = document.createElement("div");
+        line.className = "ovrow";
+        var eff = teamClassFor(tr._teams, m[2]);
+        var nm = document.createElement("div");
+        nm.className = "nm";
+        nm.innerHTML = m[1] + '<div class="hint">ตามทีม = ' + CLS_TH[eff] + "</div>";
+        line.appendChild(nm);
+        var seg = document.createElement("div");
+        seg.className = "seg";
+        [["", "ตามทีม"], ["-", "ซ่อน"], ["V", "ดู"], ["E", "แก้"]].forEach(function (ch) {
+          var b = document.createElement("span");
+          var cur = tr._overrides[m[0]] || "";
+          b.textContent = ch[1];
+          b.className = (cur === ch[0] ? "on" : "") +
+            (ch[0] === "-" ? " hide" : ch[0] === "E" ? " edit" : "");
+          b.onclick = function () {
+            if (ch[0] === "") delete tr._overrides[m[0]];
+            else tr._overrides[m[0]] = ch[0];
+            draw(); onChange(); clearMsg();
+          };
+          seg.appendChild(b);
+        });
+        line.appendChild(seg);
+        list.appendChild(line);
+      });
+    }
+    draw();
+    bg.classList.add("show");
+  }
+  document.getElementById("ovDone").onclick = function () {
+    document.getElementById("ovbg").classList.remove("show");
+  };
+  document.getElementById("ovbg").addEventListener("click", function (e) {
+    if (e.target === this) this.classList.remove("show");
+  });
+
   function collect() {
     var map = {}, overrides = {}, err = null;
     document.querySelectorAll("#rows tr").forEach(function (tr) {
       if (err) return;
       var email = tr.querySelector("input.email").value.trim().toLowerCase();
-      var roles = [].slice.call(tr.querySelectorAll(".chips .chip.on"))
-        .map(function (c) { return c.getAttribute("data-team"); }).filter(Boolean);
+      var roles = (tr._teams || []).slice();
       var ovr = tr._overrides || {};
       if (!email && !roles.length && !Object.keys(ovr).length) return;   /* แถวว่าง */
       if (!email) { err = "มีแถวที่ตั้งค่าแล้วแต่ยังไม่ใส่อีเมล"; return; }

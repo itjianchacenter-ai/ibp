@@ -47,6 +47,25 @@ button.btn:disabled{opacity:.5;cursor:not-allowed}
 .note{font-size:12px;color:var(--jc-grey);line-height:1.8;margin-top:1rem}
 .note code{background:var(--jc-sand);padding:.1em .4em;border-radius:2px;font-size:11px}
 a.back{font-size:12px;color:var(--jc-gold);text-decoration:none;font-weight:600}
+.selchip{display:inline-flex;align-items:center;gap:.35em;font-size:11px;padding:.3em .5em .3em .7em;border-radius:999px;background:var(--jc-ink);color:#fff;margin:0 .25rem .25rem 0}
+.selchip.admin{background:var(--neg)}
+.selchip b{cursor:pointer;opacity:.7;font-weight:400} .selchip b:hover{opacity:1}
+.mini{font-size:11px;padding:.3em .7em;border:1px dashed var(--jc-taupe);border-radius:999px;background:none;color:var(--jc-grey);cursor:pointer;font-family:var(--font)}
+.mini:hover{border-color:var(--jc-gold);color:var(--jc-ink)}
+.mini.has{border-style:solid;border-color:var(--jc-gold);background:var(--jc-gold);color:var(--jc-ink);font-weight:600}
+.picker{margin:.3rem 0 .1rem;padding:.5rem;border:1px solid var(--jc-taupe);border-radius:4px;background:var(--jc-sand)}
+.ovbg{display:none;position:fixed;inset:0;background:rgba(28,26,23,.45);z-index:1000;align-items:center;justify-content:center;padding:1rem}
+.ovbg.show{display:flex}
+.ovcard{background:var(--jc-paper);border-top:4px solid var(--jc-gold);border-radius:4px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:1.3rem 1.5rem;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.ovrow{display:flex;align-items:center;gap:.6rem;padding:.42rem 0;border-bottom:1px solid var(--jc-sand)}
+.ovrow .nm{flex:1;min-width:0;font-size:12.5px}
+.ovrow .hint{font-size:10.5px;color:var(--jc-grey-2)}
+.seg{display:flex;border:1px solid var(--jc-taupe);border-radius:999px;overflow:hidden;flex:none}
+.seg span{font-size:10.5px;padding:.35em .7em;cursor:pointer;color:var(--jc-grey);background:#fff;border-left:1px solid var(--jc-sand);user-select:none;white-space:nowrap}
+.seg span:first-child{border-left:0}
+.seg span.on{background:var(--jc-ink);color:#fff;font-weight:600}
+.seg span.on.hide{background:var(--neg)} .seg span.on.edit{background:#8A9A6B}
+.bar{position:sticky;bottom:0;background:var(--jc-paper);padding:.9rem 0 .2rem;border-top:1px solid var(--jc-sand)}
 </style>
 </head>
 <body>
@@ -95,6 +114,17 @@ a.back{font-size:12px;color:var(--jc-gold);text-decoration:none;font-weight:600}
       </summary>
       <div id="permRef" style="margin-top:.8rem"></div>
     </details>
+  </div>
+</div>
+<div class="ovbg" id="ovbg">
+  <div class="ovcard">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+      <div><b id="ovTitle" style="font-size:14px"></b>
+        <div style="font-size:11px;color:var(--jc-grey)">ติ๊กทับตารางทีมเฉพาะโมดูลนั้น · บังคับทั้งหน้าจอและ server · "ตามทีม" = ใช้สิทธิ์ทีมปกติ (บอกไว้ให้แล้วว่าได้อะไร)</div>
+      </div>
+      <button class="btn gold" id="ovDone" type="button" style="flex:none">เสร็จ</button>
+    </div>
+    <div id="ovList"></div>
   </div>
 </div>
 <script src="admin.js"></script>
