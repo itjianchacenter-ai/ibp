@@ -1,0 +1,12 @@
+# สำรองข้อมูลส่วนกลาง + สิทธิ์ ทุกวัน — เก็บ 30 ชุดล่าสุด
+#   sudo cp deploy/timers/jc-ibp-backup.* /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now jc-ibp-backup.timer
+[Unit]
+Description=JIAN CHA IBP - backup state + roles
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'set -e; D=/var/backups/jc-ibp; mkdir -p "$D"; \
+  tar czf "$D/jcibp-$(date +%%F-%%H%%M).tar.gz" /var/lib/jc-auth /etc/jc-auth/roles.json 2>/dev/null; \
+  ls -1t "$D"/jcibp-*.tar.gz 2>/dev/null | tail -n +31 | xargs -r rm -f; \
+  echo "backup ok: $(ls -1 "$D" | wc -l) ชุด"'

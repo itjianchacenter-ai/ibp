@@ -32,6 +32,13 @@
     if (hasPM)  KEYS.push("pm");
     if (hasSCH) KEYS.push("sch");
     if (hasCOV) KEYS.push("cov");
+    /* fc (02+) sync ผ่านคีย์ localStorage ของ store.js โดยไม่แตะ forecast.js:
+       ขาลง — ถ้าส่วนกลางใหม่กว่า เขียนคีย์ลงเครื่องแล้วชวนรีเฟรช
+       (forecast.js กู้จากคีย์พวกนี้ตอนเปิดหน้าอยู่แล้ว)
+       ขาขึ้น — DP แก้เมื่อไหร่ debounce ส่งขึ้นส่วนกลาง                    */
+    var FC_LS = ["jc.ibp.v1.session", "jc.ibp.v1.ovr", "jc.ibp.v1.params", "jc.ibp.v1.prefs"];
+    var hasFC = (typeof FCROWS !== "undefined");
+    if (hasFC) KEYS.push("fc");
     var ver = { pm: 0, sch: 0, cov: 0 };        /* เวอร์ชันส่วนกลางที่เครื่องนี้รู้จักล่าสุด */
     var central = false;                          /* ต่อส่วนกลางติดไหม */
     var conflict = {};                            /* คีย์ที่ค้างชนกันอยู่ */
@@ -59,22 +66,62 @@
       if (!sticky) setTimeout(function () { el.style.display = "none"; }, 6000);
     }
 
+    var COV_PERIOD_IDS = ["covPd", "covAsof", "covAgAsof", "covPdDays", "covMonths"];
+
     function applyData(key, data) {
       try {
         if (key === "pm" && Array.isArray(data)) { window.PM = data; pmRender(); }
         if (key === "sch" && Array.isArray(data)) { window.SCH = data; schRender(); }
-        if (key === "cov" && data && Array.isArray(data.stock) && data.stock.length)
+        if (key === "cov" && data && Array.isArray(data.stock) && data.stock.length) {
           covJsonIn(JSON.stringify(data));
+          /* งวดข้อมูล 5 ช่อง — ไฟล์ .json ของ vendor ไม่เก็บ เราเก็บเพิ่มให้
+             แล้วคำนวณซ้ำด้วย meta ที่ถูกต้อง (ห้ามเรียก covApply — มันอ่านจาก
+             "ไฟล์ในช่องอัปโหลด" ซึ่งไม่มีแล้วหลังรีเฟรช)                    */
+          if (data.periodFields && typeof covCompute === "function") {
+            COV_PERIOD_IDS.forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el && data.periodFields[id] != null) el.value = data.periodFields[id];
+            });
+            var meta = Object.assign({}, COV.calc.meta, {
+              period: data.periodFields.covPd || COV.calc.meta.period,
+              days: (+data.periodFields.covPdDays || COV.calc.meta.days || 30),
+              months: (+data.periodFields.covMonths || COV.calc.meta.months || 1)
+            });
+            COV.calc = covCompute(DATA.stock, DATA.aging, meta);
+            covRender();
+            if (typeof covRewire === "function") covRewire();
+          }
+        }
+        if (key === "fc" && data && typeof data === "object") {
+          /* เขียนคีย์ลงเครื่อง — forecast.js จะกู้เองตอนโหลดหน้า "ครั้งถัดไป" */
+          FC_LS.forEach(function (k) {
+            if (typeof data[k] === "string") { try { localStorage.setItem(k, data[k]); } catch (e) {} }
+          });
+        }
       } catch (e) { if (window.console) console.warn("persist: apply " + key, e); }
     }
     function snapshot(key) {
       if (key === "pm") return PM;
       if (key === "sch") return SCH;
       /* cov เก็บเฉพาะตอนเป็นชุดอัปโหลด — baseline ไม่มีประโยชน์ที่จะแชร์ */
-      if (key === "cov")
-        return (COV.calc && (COV.calc.meta || {}).basis === "upload")
-          ? { app: "JIANCHA_STOCK_ONHAND", v: 1, stock: DATA.stock, aging: DATA.aging }
-          : null;
+      if (key === "cov") {
+        if (!(COV.calc && (COV.calc.meta || {}).basis === "upload")) return null;
+        var pf = {};
+        COV_PERIOD_IDS.forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && el.value !== "") pf[id] = el.value;
+        });
+        return { app: "JIANCHA_STOCK_ONHAND", v: 1, stock: DATA.stock, aging: DATA.aging,
+                 periodFields: pf };
+      }
+      if (key === "fc") {
+        var o = {}, any = false;
+        FC_LS.forEach(function (k) {
+          var v2 = null; try { v2 = localStorage.getItem(k); } catch (e) {}
+          if (v2 != null) { o[k] = v2; any = true; }
+        });
+        return any ? o : null;
+      }
       return null;
     }
 
@@ -87,8 +134,26 @@
         .then(function (s) {
           if (s && s.version > 0 && s.data != null) {
             ver[key] = s.version;
-            applyData(key, s.data);
-            STORE.set(key + ".cache", s);         /* สำเนาไว้ใช้ยามส่วนกลางล่ม */
+            if (key === "fc") {
+              /* forecast.js กู้จาก localStorage ไปแล้วตอนหน้าโหลด — ถ้าชุด
+                 ส่วนกลางต่างจากที่กู้ไป ต้องรีเฟรชหนึ่งครั้งเพื่อใช้ชุดใหม่ */
+              var before = FC_LS.map(function (k) {
+                try { return localStorage.getItem(k) || ""; } catch (e) { return ""; }
+              }).join("");
+              applyData(key, s.data);
+              var after = FC_LS.map(function (k) {
+                try { return localStorage.getItem(k) || ""; } catch (e) { return ""; }
+              }).join("");
+              if (before !== after)
+                toast("⟳ มีชุดพยากรณ์ 02+ จากส่วนกลาง (v" + s.version + " โดย " +
+                      (s.savedBy || "?") + ") — <a href=\"#\" data-reload " +
+                      "style=\"color:#AD9C82;font-weight:600\">รีเฟรชเพื่อใช้ชุดนี้</a>", true);
+            } else {
+              applyData(key, s.data);
+            }
+            /* fc ไม่ต้องมี cache ซ้ำ — ตัวคีย์ localStorage ของมันคือ cache อยู่แล้ว
+               (เก็บซ้ำ = ชุดพยากรณ์ใหญ่ ๆ กินโควตาสองเท่าเปล่า ๆ) */
+            if (key !== "fc") STORE.set(key + ".cache", s);
           } else if (s == null && !central) {
             var loc = STORE.get(key + ".cache", null);
             if (loc && loc.data != null) { applyData(key, loc.data); ver[key] = loc.version || 0; }
@@ -120,7 +185,7 @@
       }).then(function (r) {
         if (r.status === 200) return r.json().then(function (j) {
           ver[key] = j.version; conflict[key] = false;
-          STORE.set(key + ".cache", { version: j.version, data: body });
+          if (key !== "fc") STORE.set(key + ".cache", { version: j.version, data: body });
         });
         if (r.status === 409) return r.json().then(function (j) {
           conflict[key] = true;
@@ -142,10 +207,10 @@
         sig[key] = s;
         var snap = snapshot(key);
         if (snap == null) {                      /* cov กลับ baseline = ล้างของเครื่อง (ส่วนกลางให้คนมีสิทธิ์ตัดสินใจเอง) */
-          STORE.del(key + ".cache");
+          if (key !== "fc") STORE.del(key + ".cache");
           return;
         }
-        STORE.set(key + ".cache", { version: ver[key], data: snap });
+        if (key !== "fc") STORE.set(key + ".cache", { version: ver[key], data: snap });
         if (central && !conflict[key]) push(key, snap);
       });
     }

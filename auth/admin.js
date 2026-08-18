@@ -108,6 +108,42 @@
   };
   $("reload").onclick = load;
 
+  /* ── คนที่ล็อกอินแล้วแต่ยังไม่ถูกจัดทีม ─────────────────────────────
+     ดึงจากบันทึกการเข้าระบบของตัวตรวจ — แอดมินไม่ต้องเดาว่าต้องเพิ่มใคร */
+  function loadUnassigned() {
+    Promise.all([
+      fetch("/authz/logins", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : {}; }),
+      fetch("/authz/roles", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : { map: {} }; })
+    ]).then(function (rs) {
+      var seen = rs[0], mapped = rs[1].map || {};
+      var un = Object.keys(seen).filter(function (em) { return !mapped[em]; }).sort();
+      var box = $("unassigned");
+      if (!box) return;
+      if (!un.length) { box.style.display = "none"; return; }
+      box.style.display = "block";
+      var list = $("unlist"); list.innerHTML = "";
+      un.forEach(function (em) {
+        var li = document.createElement("div");
+        li.style.cssText = "display:flex;align-items:center;gap:.6rem;padding:.3rem 0";
+        var s = document.createElement("span");
+        s.textContent = em + "  (เข้าล่าสุด " + String(seen[em].last).slice(0, 16).replace("T", " ") + " · " + seen[em].n + " ครั้ง)";
+        s.style.cssText = "font-size:12px;flex:1";
+        var b = document.createElement("button");
+        b.className = "btn ghost"; b.type = "button"; b.textContent = "+ จัดทีม";
+        b.style.cssText = "padding:.3em .8em;font-size:11px";
+        b.onclick = function () {
+          $("rows").appendChild(row(em, []));
+          li.remove();
+          msg("เลือกทีมให้ " + em + " แล้วกดบันทึก", "info");
+          window.scrollTo(0, document.body.scrollHeight);
+        };
+        li.appendChild(s); li.appendChild(b);
+        list.appendChild(li);
+      });
+    }).catch(function () { /* ไม่มีสิทธิ์/ออฟไลน์ — ไม่ต้องแสดง */ });
+  }
+  loadUnassigned();
+
   $("save").onclick = function () {
     var c = collect();
     if (c.err) { msg(c.err, "err"); return; }

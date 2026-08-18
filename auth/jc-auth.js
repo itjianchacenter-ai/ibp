@@ -322,6 +322,31 @@ function createServer(cfg) {
   /* บันทึกไว้ให้ตามรอยได้ แต่ไม่บันทึก token — log ไม่ใช่ที่เก็บความลับ */
   function log(m) { process.stdout.write(new Date().toISOString() + " " + m + "\n"); }
 
+  /* ── rate limit ด่านที่รับของจากภายนอก ────────────────────────────────
+     กันเดารัว/สแปม token ที่ /session (แลกคุกกี้) — 20 ครั้ง/นาที/ไอพี
+     เกินพอสำหรับคนจริง (ล็อกอินสำเร็จครั้งเดียวอยู่ได้ 12 ชม.)            */
+  const rateMap = new Map();
+  function rateOk(req, bucket) {
+    const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "?")
+      .split(",")[0].trim();
+    const now = Date.now(), k = bucket + ":" + ip;
+    let e = rateMap.get(k);
+    if (!e || now - e.t0 > 60000) { e = { t0: now, n: 0 }; rateMap.set(k, e); }
+    if (rateMap.size > 5000) rateMap.clear();       /* กันโตไม่จำกัด */
+    e.n++;
+    return e.n <= 20;
+  }
+
+  /* ── บันทึกการล็อกอินลง state dir — เมนูสิทธิ์ใช้ชี้ว่าใครยังไม่ถูกจัดทีม */
+  function recordLogin(email) {
+    try {
+      const dir = cfg.stateDir || "/var/lib/jc-auth/state";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.appendFileSync(dir + "/logins.jsonl",
+        JSON.stringify({ t: new Date().toISOString(), email: email }) + "\n");
+    } catch (e) { /* พลาดได้ ไม่ใช่เส้นทางหลัก */ }
+  }
+
   return http.createServer(function (req, res) {
     const url = (req.url || "/").split("?")[0];
 
@@ -340,6 +365,7 @@ function createServer(cfg) {
 
     /* หน้า login ส่ง access_token มาแลกเป็นคุกกี้ */
     if (url === "/session" && req.method === "POST") {
+      if (!rateOk(req, "session")) { res.writeHead(429).end(); return; }
       readBody(req, function (raw) {
         let tok = "";
         try { tok = String(JSON.parse(raw || "{}").access_token || ""); } catch (e) { /* ว่างไว้ */ }
@@ -354,6 +380,7 @@ function createServer(cfg) {
         const life = Math.max(60, Math.min(MAXAGE, v.exp - Math.floor(Date.now() / 1000)));
         setCookie(res, tok, life);
         log("เข้าสู่ระบบ: " + v.email);
+        recordLogin(v.email);
         res.writeHead(204).end();
       });
       return;
@@ -386,7 +413,13 @@ function createServer(cfg) {
         sch: { max: 2 * 1024 * 1024, write: ["MKT", "SP", "RND"],
                noRead: ["FIN", "IT"] },
         cov: { max: 8 * 1024 * 1024, write: ["SP"],
-               noRead: ["MKT", "SALES", "RND"] }
+               noRead: ["MKT", "SALES", "RND"] },
+        /* 02+ Sales Forecast — แถว fc ในชีท 01: CCPV---A-A
+           DP เป็นเจ้าของคนเดียว (P) · FIN/EXEC เป็นผู้อนุมัติ (อ่าน) ·
+           PROC/RND/OPS/IT ไม่เกี่ยว — ปิด R-04 เต็มรูป: ชุดพยากรณ์+override
+           ของ Demand Planner ขึ้น corporate data layer ทุกเครื่องเห็นชุดเดียว */
+        fc:  { max: 6 * 1024 * 1024, write: ["DP"],
+               noRead: ["PROC", "RND", "OPS", "IT"] }
       };
       const v = verify(readCookie(req));
       if (!v.ok) { res.writeHead(401).end(); return; }
@@ -423,7 +456,7 @@ function createServer(cfg) {
         json(res, 200, outMeta); return;
       }
 
-      const m = url.match(/^\/api\/state\/(pm|sch|cov)$/);
+      const m = url.match(/^\/api\/state\/(pm|sch|cov|fc)$/);
       if (!m) { res.writeHead(404).end(); return; }
       const key = m[1];
 
@@ -479,6 +512,27 @@ function createServer(cfg) {
         return;
       }
       res.writeHead(405).end(); return;
+    }
+
+    /* ══ ใครล็อกอินแล้วบ้าง · /authz/logins (ADMIN) ═════════════════════
+       เมนูสิทธิ์ใช้แสดง "คนที่เข้าระบบแล้วแต่ยังไม่ถูกจัดทีม" — ปิดช่องที่
+       การจัดทีมค้างเพราะแอดมินไม่รู้ว่าต้องเพิ่มใครบ้าง                     */
+    if (url === "/authz/logins" && req.method === "GET") {
+      const v = verify(readCookie(req));
+      if (!v.ok) { res.writeHead(401).end(); return; }
+      if (rolesFor(v.email).split(",").indexOf("ADMIN") < 0) { res.writeHead(403).end(); return; }
+      const seen = {};
+      try {
+        const dir = cfg.stateDir || "/var/lib/jc-auth/state";
+        String(fs.readFileSync(dir + "/logins.jsonl", "utf8")).split("\n").forEach(function (ln) {
+          if (!ln.trim()) return;
+          try { const o = JSON.parse(ln); seen[o.email] = { last: o.t, n: (seen[o.email] ? seen[o.email].n : 0) + 1 }; }
+          catch (e) { /* บรรทัดเสีย ข้าม */ }
+        });
+      } catch (e) { /* ยังไม่มีไฟล์ = ยังไม่มีใครล็อกอินหลังเปิดฟีเจอร์ */ }
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" })
+         .end(JSON.stringify(seen));
+      return;
     }
 
     /* ══ เมนูจัดการสิทธิ์ · /authz/roles ═══════════════════════════════

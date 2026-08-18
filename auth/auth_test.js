@@ -488,9 +488,35 @@ function stateApiTests(done) {
                         const audit = fsS.readFileSync(pS.join(dir, "state", "audit.jsonl"), "utf8").trim().split("\n");
                         ok(audit.length === 2 && /mkt@jianchatea.com/.test(audit[0]),
                            "audit log บันทึกครบทุกการเขียน (ชีท 06)");
-                        srvS.close();
-                        fsS.rmSync(dir, { recursive: true, force: true });
-                        done();
+                        /* fc: DP เขียนได้คนเดียว (P) · PROC อ่านไม่ได้ ('-') */
+                        const dpC = mk("dp@jianchatea.com");
+                        fsS.writeFileSync(rf, JSON.stringify({
+                          "mkt@jianchatea.com": "MKT", "sp@jianchatea.com": "SP",
+                          "proc@jianchatea.com": "PROC", "boss@jianchatea.com": "ADMIN",
+                          "dp@jianchatea.com": "DP" }));
+                        req3("POST", "/api/state/fc", dpC, { baseVersion: 0, data: { "jc.ibp.v1.session": "{}" } }, (sA) => {
+                          ok(sA === 200, "DP (P ใน 02+) เขียน fc ได้");
+                          req3("POST", "/api/state/fc", C.mkt, { baseVersion: 1, data: {} }, (sB) => {
+                            ok(sB === 403, "MKT เขียน fc ไม่ได้ (ตาราง=C) → 403");
+                            req3("GET", "/api/state/fc", C.proc, null, (sC) => {
+                              ok(sC === 403, "PROC อ่าน fc ไม่ได้ (ตาราง='-') → 403");
+                              /* /authz/logins — ADMIN เท่านั้น */
+                              fsS.mkdirSync(pS.join(dir, "state"), { recursive: true });
+                              fsS.appendFileSync(pS.join(dir, "state", "logins.jsonl"),
+                                JSON.stringify({ t: "2026-08-18T05:00:00Z", email: "newbie@jianchatea.com" }) + "\n");
+                              req3("GET", "/authz/logins", C.boss, null, (sD, bD) => {
+                                ok(sD === 200 && /newbie@jianchatea.com/.test(bD),
+                                   "/authz/logins แสดงคนที่เคยล็อกอิน (ให้เมนูชี้คนยังไม่จัดทีม)");
+                                req3("GET", "/authz/logins", C.mkt, null, (sE) => {
+                                  ok(sE === 403, "/authz/logins ปิดสำหรับคนไม่ใช่ ADMIN");
+                                  srvS.close();
+                                  fsS.rmSync(dir, { recursive: true, force: true });
+                                  done();
+                                });
+                              });
+                            });
+                          });
+                        });
                       });
                     });
                   });
