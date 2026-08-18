@@ -92,11 +92,34 @@
       el.disabled = true;
       el.setAttribute("data-authz-lock", "1");
     });
+    /* ปุ่มเลือกไฟล์หลายจุด (เช่นช่องอัปโหลดของ 03+) เป็น <label> ไม่ใช่ <button>
+       ตัว input ข้างในถูก disable แล้วก็จริง แต่ label ยังหน้าตาเหมือนกดได้
+       กดแล้วเงียบสนิท — ผู้ใช้เข้าใจว่าระบบพัง (มีรายงานจริงตอน UAT)
+       ต้องทำให้ "เห็นว่าถูกปิด" ไม่ใช่แค่ "ถูกปิด"                          */
+    sec.querySelectorAll("label").forEach(function (l) {
+      var target = l.querySelector("input[type=file]") ||
+        (l.htmlFor ? document.getElementById(l.htmlFor) : null);
+      if (target && target.type === "file") {
+        l.style.pointerEvents = "none";
+        l.style.opacity = "0.45";
+        l.title = "ปิดตามสิทธิ์ — ทีมของคุณดูโมดูลนี้ได้อย่างเดียว";
+      }
+    });
     /* จุดรับไฟล์แบบลากวาง (โมดูล 02+) — ปิดทั้งโซน */
     sec.querySelectorAll("#fcdrop,[data-drop]").forEach(function (el) {
       el.style.pointerEvents = "none";
       el.style.opacity = "0.55";
     });
+    /* ป้ายบอกเหตุผลหัวโมดูล — ครั้งเดียวพอ (observer เรียกซ้ำได้) */
+    if (!sec.querySelector("[data-authz-note]")) {
+      var note = document.createElement("div");
+      note.setAttribute("data-authz-note", "1");
+      note.textContent = "🔒 โมดูลนี้เปิดดูอย่างเดียวตามสิทธิ์ทีมของคุณ (Authorization Matrix v17) — ส่งออกข้อมูลได้ · การแก้ไขและอัปโหลดถูกปิด · ติดต่อผู้ดูแลหากต้องแก้ไข";
+      note.style.cssText = "margin:10px 0 14px;padding:8px 14px;font-size:12px;line-height:1.6;" +
+        "background:#EAE4D8;border:1px solid #D8D1C3;border-left:3px solid #AD9C82;" +
+        "border-radius:3px;color:#57534C";
+      sec.insertBefore(note, sec.firstChild);
+    }
   }
 
   function apply() {
