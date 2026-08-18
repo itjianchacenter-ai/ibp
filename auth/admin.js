@@ -144,6 +144,64 @@
   }
   loadUnassigned();
 
+  /* ── ตารางอ้างอิง: แต่ละทีมทำอะไรได้บ้าง ─────────────────────────────
+     ชุดเดียวกับที่ authz.js บังคับบนหน้าแอป (ถอดจากชีท 01 ทุกช่อง)
+     P/E/U = แก้ได้ · V/C/A = ดูอย่างเดียว · "-" = มองไม่เห็น              */
+  (function renderPermRef() {
+    var box = document.getElementById("permRef");
+    if (!box) return;
+    var TEAMS10 = ["MKT", "SALES", "DP", "SP", "PROC", "RND", "OPS", "FIN", "IT", "EXEC"];
+    var MOD = [
+      ["exec", "00 Executive Summary", "VVPCVVVCVA"],
+      ["m1", "01 Demand Sensing", "VVPV-VC-UV"],
+      ["fa", "1++ Forecast Accuracy", "VVPV-V-V-V"],
+      ["lfl", "1+ LFL Pace", "CCPV--CV-V"],
+      ["m2", "02 Per-Menu Plan", "CCPCVCVV-V"],
+      ["fc", "02+ Sales Forecast", "CCPV---A-A"],
+      ["npd", "2+ NPD War Room", "CVCV-PC--V"],
+      ["sched", "2++ NPD Schedule", "EVCECPC--V"],
+      ["promo", "2+++ Promotion", "PCCC-CCA-V"],
+      ["m3", "03 Supply Review", "--CPA-VV-V"],
+      ["m3b", "03+ Stock Cover", "--CPC-VCCV"],
+      ["m3c", "3++ ABC/XYZ", "--CPC--V-V"],
+      ["ss", "SS Safety Stock", "--CPC--C-V"],
+      ["explorer", "EXP Data Explorer", "VVEEVVVVEV"],
+      ["m4", "04 Scenario Planning", "CCPC---C-A"],
+      ["actions", "05 Actions & Governance", "EEEEEEEEEA"]
+    ];
+    function bucket(code) {
+      if (code === "P" || code === "E" || code === "U") return "edit";
+      if (code === "-") return "hide";
+      return "read";
+    }
+    var html = "";
+    TEAMS10.concat(["ADMIN", "VIEW"]).forEach(function (team) {
+      var e = [], r = [], h = [];
+      if (team === "ADMIN") { e = MOD.map(function (m) { return m[1]; }); }
+      else if (team === "VIEW") { r = MOD.map(function (m) { return m[1]; }); }
+      else {
+        var ti = TEAMS10.indexOf(team);
+        MOD.forEach(function (m) {
+          var b = bucket(m[2].charAt(ti));
+          (b === "edit" ? e : b === "read" ? r : h).push(m[1]);
+        });
+      }
+      var cell = function (arr, color) {
+        return arr.length
+          ? '<span style="color:' + color + '">' + arr.join(" · ") + "</span>"
+          : '<span style="color:var(--jc-grey-2)">—</span>';
+      };
+      html += '<div style="padding:.6rem 0;border-bottom:1px solid var(--jc-sand);font-size:12px;line-height:1.7">' +
+        '<b style="display:inline-block;min-width:56px">' + team + "</b>" +
+        '<div style="margin-left:56px;margin-top:-1.35em">' +
+        "✏️ แก้ได้: " + cell(e, "var(--jc-ink)") + "<br>" +
+        "👁 ดูอย่างเดียว: " + cell(r, "var(--jc-grey)") + "<br>" +
+        "🚫 มองไม่เห็น: " + cell(h, "#B96A55") +
+        "</div></div>";
+    });
+    box.innerHTML = html;
+  })();
+
   $("save").onclick = function () {
     var c = collect();
     if (c.err) { msg(c.err, "err"); return; }
