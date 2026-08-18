@@ -1,22 +1,7 @@
-# รายงานทบทวนสิทธิ์รายไตรมาส (ชีท 06: IT + SCM Director ทบทวนทุกไตรมาส)
-# สร้างรายงานอัตโนมัติ — คนแค่เปิดอ่าน เซ็นรับ และถอนสิทธิ์คนที่ไม่ควรมี
+# รายงานทบทวนสิทธิ์รายไตรมาส (ชีท 06) — logic อยู่ใน jc-ibp-review.sh
 [Unit]
 Description=JIAN CHA IBP - quarterly access review report
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'set -e; D=/var/lib/jc-auth/reviews; mkdir -p "$D"; \
-  F="$D/REVIEW-$(date +%%Y)-Q$(( ($(date +%%-m)-1)/3+1 )).md"; \
-  { echo "# ทบทวนสิทธิ์ผู้ใช้ IBP Control Tower · $(date +%%F)"; echo; \
-    echo "ตามชีท 06: IT + SCM Director ทบทวนรายชื่อเทียบชีท 01 ทุกไตรมาส"; echo; \
-    echo "## ผู้ที่ถูกจัดทีม (roles.json)"; echo "\`\`\`"; \
-    cat /etc/jc-auth/roles.json; echo "\`\`\`"; echo; \
-    echo "## การเข้าระบบ 90 วันล่าสุด (จาก log ตัวตรวจสิทธิ์)"; echo "\`\`\`"; \
-    journalctl -u jc-auth --since "-90 days" --no-pager 2>/dev/null | grep "เข้าสู่ระบบ" | awk "{print \$NF}" | sort | uniq -c | sort -rn; echo "\`\`\`"; echo; \
-    echo "## การแก้ไขข้อมูลส่วนกลาง (audit)"; echo "\`\`\`"; \
-    tail -50 /var/lib/jc-auth/state/audit.jsonl 2>/dev/null || echo "(ยังไม่มี)"; echo "\`\`\`"; echo; \
-    echo "## ลงนามรับการทบทวน"; \
-    echo "- [ ] IT Director — ตรวจแล้ว วันที่ ______"; \
-    echo "- [ ] SCM Director — ตรวจแล้ว วันที่ ______"; \
-    echo "- รายชื่อที่ถอนสิทธิ์รอบนี้: ______"; \
-  } > "$F"; echo "review report: $F"'
+ExecStart=/bin/bash /opt/jiancha-forecast/deploy/timers/jc-ibp-review.sh

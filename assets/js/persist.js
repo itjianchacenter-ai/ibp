@@ -68,6 +68,40 @@
 
     var COV_PERIOD_IDS = ["covPd", "covAsof", "covAgAsof", "covPdDays", "covMonths"];
 
+    /* ── กับดัก covApply หลังกู้จากส่วนกลาง ─────────────────────────────
+       vendor ผูกช่องงวดข้อมูลไว้ว่า เปลี่ยนเมื่อไหร่ให้เรียก covApply()
+       แต่ covApply สร้างข้อมูลจาก "ไฟล์ในช่องอัปโหลด" เท่านั้น — หลังรีเฟรช
+       ช่องว่างเปล่า ผู้ใช้แก้งวดจะเจอ "ยังจับคู่คอลัมน์ไม่ครบ" ทั้งที่ข้อมูล
+       แสดงอยู่เต็มจอ และงวดที่แก้ไม่มีผลจริง
+       โชคดี listener เรียกผ่านชื่อ global (resolve ตอนเรียก) จึงห่อทับได้:
+       มีไฟล์ในช่อง → ใช้ของเดิม · ไม่มี (เพิ่งกู้) → คำนวณจากชุดที่กู้แทน   */
+    if (hasCOV && typeof covApply === "function" && !window.__jcCovApplyWrap) {
+      window.__jcCovApplyWrap = true;
+      var covApplyOrig = window.covApply;
+      window.covApply = function () {
+        var hasFiles = false;
+        try {
+          hasFiles = (typeof COV_WH !== "undefined") &&
+            COV_WH.some(function (w) { return COV.src && COV.src[w.k]; });
+        } catch (e) { hasFiles = false; }
+        if (hasFiles || !(COV.calc && (COV.calc.meta || {}).basis === "upload"))
+          return covApplyOrig.apply(this, arguments);
+        try {
+          var P = (typeof covPeriod === "function") ? covPeriod() : {};
+          COV.calc = covCompute(DATA.stock, DATA.aging, Object.assign({}, COV.calc.meta, {
+            days: P.days || COV.calc.meta.days || 30,
+            months: P.months || COV.calc.meta.months || 1,
+            period: P.label || COV.calc.meta.period
+          }));
+          covRender();
+          if (typeof covRewire === "function") covRewire();
+          var st = document.getElementById("covStat");
+          if (st) st.innerHTML = "คำนวณใหม่จากชุดส่วนกลางด้วยงวดที่แก้ · " +
+            "(ช่องอัปโหลดว่างเพราะเพิ่งเปิดหน้า — ข้อมูลคือชุดที่กู้มา)";
+        } catch (e) { return covApplyOrig.apply(this, arguments); }
+      };
+    }
+
     function applyData(key, data) {
       try {
         if (key === "pm" && Array.isArray(data)) { window.PM = data; pmRender(); }
@@ -177,11 +211,15 @@
     function seedSigs() { KEYS.forEach(function (k) { sig[k] = calcSig(k); }); }
 
     function push(key, body) {
+      var payload = JSON.stringify({ baseVersion: ver[key], data: body });
       fetch("/api/state/" + key, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ baseVersion: ver[key], data: body })
+        /* keepalive ทำให้ request รอดตอนปิดแท็บ แต่เบราว์เซอร์จำกัด ~64KB —
+           เกินนั้นใส่ไปมันจะ throw ทันที จึงเปิดเฉพาะ payload เล็ก */
+        keepalive: payload.length < 50000,
+        body: payload
       }).then(function (r) {
         if (r.status === 200) return r.json().then(function (j) {
           ver[key] = j.version; conflict[key] = false;
