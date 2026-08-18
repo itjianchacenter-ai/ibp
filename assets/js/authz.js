@@ -129,6 +129,14 @@
       .toUpperCase().split(",").map(function (s) { return s.trim(); }).filter(Boolean);
     if (!roles.length) roles = ["VIEW"];
 
+    /* ── override รายคนจากช่องติ๊กในเมนูสิทธิ์ ("m3b:E,promo:-") ─────────
+       ทับตารางทีมเฉพาะโมดูลที่ติ๊ก · ADMIN ไม่ถูกทับ (server ก็กติกาเดียวกัน) */
+    var ov = {};
+    String(tag.getAttribute("data-perm") || "").split(",").forEach(function (t) {
+      var p = t.trim().split(":");
+      if (p.length === 2 && MATRIX[p[0]] && /^(-|V|E)$/.test(p[1])) ov[p[0]] = p[1];
+    });
+
     /* ADMIN เห็นทางเข้าเมนูจัดการสิทธิ์บนแถบผู้ใช้ (div ถัดจาก jcAuthz
        ตามลำดับที่ nginx ฉีด) — คนอื่นเปิด /admin.html ตรงก็เจอ 403 จาก API
        อยู่ดี ลิงก์นี้เป็นแค่ทางลัด ไม่ใช่ด่าน                              */
@@ -151,6 +159,8 @@
       var sec = document.getElementById(id);
       if (!sec) return;
       var c = classFor(id, roles);
+      if (ov[id] && roles.indexOf("ADMIN") < 0)
+        c = ov[id] === "E" ? "edit" : ov[id] === "V" ? "readonly" : "hidden";
       if (c === "hidden") {
         sec.style.display = "none";
         /* ซ่อนชิปเมนูบนแถบนำทางของโมดูลนั้นด้วย */

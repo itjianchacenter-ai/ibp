@@ -509,9 +509,60 @@ function stateApiTests(done) {
                                    "/authz/logins แสดงคนที่เคยล็อกอิน (ให้เมนูชี้คนยังไม่จัดทีม)");
                                 req3("GET", "/authz/logins", C.mkt, null, (sE) => {
                                   ok(sE === 403, "/authz/logins ปิดสำหรับคนไม่ใช่ ADMIN");
-                                  srvS.close();
-                                  fsS.rmSync(dir, { recursive: true, force: true });
-                                  done();
+
+                                  /* ══ ช่องติ๊กรายคน (overrides) ══════════════ */
+                                  /* SALES ปกติเขียน pm ไม่ได้ (C) — ติ๊ก promo:E ให้เขียนได้
+                                     MKT เจ้าของ pm — ติ๊ก promo:V ต้องห้ามเขียน */
+                                  fsS.writeFileSync(rf, JSON.stringify({
+                                    "mkt@jianchatea.com": "MKT", "sales1@jianchatea.com": "SALES",
+                                    "proc@jianchatea.com": "PROC", "boss@jianchatea.com": "ADMIN",
+                                    "_overrides": {
+                                      "sales1@jianchatea.com": { "promo": "E" },
+                                      "mkt@jianchatea.com": { "promo": "V" },
+                                      "proc@jianchatea.com": { "promo": "-" }
+                                    }
+                                  }));
+                                  const salesC = mk("sales1@jianchatea.com");
+                                  req3("GET", "/api/state/pm", C.boss, null, (sV, bV) => {
+                                    const curVer = JSON.parse(bV).version;
+                                    req3("POST", "/api/state/pm", salesC,
+                                         { baseVersion: curVer, data: [{ id: "ov1" }] }, (s10) => {
+                                      ok(s10 === 200, "ติ๊ก แก้ ให้ SALES → เขียน pm ได้ (ทีมปกติทำไม่ได้)");
+                                      req3("POST", "/api/state/pm", C.mkt,
+                                           { baseVersion: curVer + 1, data: [] }, (s11) => {
+                                        ok(s11 === 403, "ติ๊ก ดู ให้ MKT (เจ้าของทีม) → ห้ามเขียน");
+                                        req3("GET", "/api/state/pm", C.proc, null, (s12) => {
+                                          ok(s12 === 403, "ติ๊ก ซ่อน ให้ PROC → อ่านไม่ได้ (เหมือนเดิมแต่มาจาก override)");
+                                          /* /verify ต้องส่ง X-Auth-Perm ให้ nginx ฉีดลงหน้า */
+                                          req3("GET", "/verify", salesC, null, (s13, _b, ) => {}, true);
+                                          http.get({ host: "127.0.0.1", port: port, path: "/verify",
+                                                     headers: { Cookie: salesC } }, (rv) => {
+                                            rv.resume();
+                                            ok(rv.headers["x-auth-perm"] === "promo:E",
+                                               "/verify ส่ง X-Auth-Perm = promo:E (ให้หน้าจอปลดล็อกตาม)");
+                                            /* POST overrides ผ่าน API — ระดับเพี้ยนต้องถูกปัด */
+                                            req3("POST", "/authz/roles", C.boss, {
+                                              map: { "boss@jianchatea.com": ["ADMIN"] },
+                                              overrides: { "boss@jianchatea.com": { "m3b": "X" } }
+                                            }, (s14, b14) => {
+                                              ok(s14 === 400 && /ระดับ/.test(b14),
+                                                 "POST overrides ระดับนอกสารบบ (X) → 400");
+                                              req3("POST", "/authz/roles", C.boss, {
+                                                map: { "boss@jianchatea.com": ["ADMIN"] },
+                                                overrides: { "boss@jianchatea.com": { "nosuchmod": "E" } }
+                                              }, (s15, b15) => {
+                                                ok(s15 === 400 && /โมดูล/.test(b15),
+                                                   "POST overrides โมดูลนอกสารบบ → 400");
+                                                srvS.close();
+                                                fsS.rmSync(dir, { recursive: true, force: true });
+                                                done();
+                                              });
+                                            });
+                                          });
+                                        });
+                                      });
+                                    });
+                                  });
                                 });
                               });
                             });

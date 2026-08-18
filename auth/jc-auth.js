@@ -239,29 +239,49 @@ function buildVerifier(cfg) {
 
    ค่าบทบาทถูกส่งเป็น header ให้ nginx แล้วถูกฉีดลง HTML จึงบังคับ
    ชุดตัวอักษร [A-Z0-9_-] ต่อบทบาท — ค่าผิดรูปถูกทิ้ง ไม่ใช่ปล่อยผ่าน   */
+/* รายชื่อโมดูลที่ override รายคนได้ — ตรงกับ section id บนหน้าแอป */
+const MOD_IDS = ["exec", "m1", "fa", "lfl", "m2", "fc", "npd", "sched", "promo",
+                 "m3", "m3b", "m3c", "ss", "explorer", "m4", "actions"];
+/* ระดับที่ติ๊กได้ต่อโมดูล: "-" ซ่อน · "V" ดูอย่างเดียว · "E" แก้ได้ */
+const OV_LEVELS = ["-", "V", "E"];
+
 function buildRoles(cfg) {
   const ROLES_FILE   = cfg.rolesFile || null;
   const DEFAULT_ROLE = (/^[A-Z0-9_-]{1,24}$/.test(String(cfg.defaultRole || "").toUpperCase()))
     ? String(cfg.defaultRole).toUpperCase() : "VIEW";
-  let cache = { key: "", map: {} };
+  let cache = { key: "", map: {}, ov: {} };
 
-  function map() {
-    if (!ROLES_FILE) return {};
+  function load() {
+    if (!ROLES_FILE) return cache;
     let st;
-    try { st = fs.statSync(ROLES_FILE); } catch (e) { return cache.map; }
+    try { st = fs.statSync(ROLES_FILE); } catch (e) { return cache; }
     const key = st.mtimeMs + ":" + st.size;
     if (cache.key !== key) {
       try {
         const raw = JSON.parse(fs.readFileSync(ROLES_FILE, "utf8"));
         const m = {};
         Object.keys(raw).forEach(function (em) {
-          if (em.charAt(0) === "_") return;               /* คีย์คอมเมนต์ */
+          if (em.charAt(0) === "_") return;               /* คีย์คอมเมนต์/override */
           const v = Array.isArray(raw[em]) ? raw[em] : [raw[em]];
           const ok = v.map(function (r) { return String(r).trim().toUpperCase(); })
                       .filter(function (r) { return /^[A-Z0-9_-]{1,24}$/.test(r); });
           if (ok.length) m[String(em).trim().toLowerCase()] = ok;
         });
-        cache = { key: key, map: m };
+        /* ── override รายคน (ช่องติ๊กในเมนูสิทธิ์) ─────────────────────
+           _overrides: { "email": { "m3b": "E", "promo": "-" } }
+           ค่าที่ติ๊กทับตารางทีมเฉพาะโมดูลนั้น · ตรวจชื่อโมดูล/ระดับเข้ม
+           เพราะค่าถูกส่งเป็น header และฉีดลง HTML                        */
+        const ov = {};
+        const rawOv = raw._overrides || {};
+        Object.keys(rawOv).forEach(function (em) {
+          const per = {}, src = rawOv[em] || {};
+          Object.keys(src).forEach(function (mod) {
+            const lv = String(src[mod]).trim().toUpperCase();
+            if (MOD_IDS.indexOf(mod) >= 0 && OV_LEVELS.indexOf(lv) >= 0) per[mod] = lv;
+          });
+          if (Object.keys(per).length) ov[String(em).trim().toLowerCase()] = per;
+        });
+        cache = { key: key, map: m, ov: ov };
       } catch (e) {
         /* ไฟล์พังกลางทาง — ใช้ชุดที่อ่านได้ล่าสุดต่อไป ดีกว่าทุกคนหลุดเป็น VIEW
            (ต่างจาก allowlist ที่ต้อง fail-closed เพราะนั่นคือด่านเข้า
@@ -269,13 +289,21 @@ function buildRoles(cfg) {
         process.stderr.write("jc-auth: อ่าน rolesFile ไม่ได้ — ใช้ชุดเดิมไปก่อน (" + e.message + ")\n");
       }
     }
-    return cache.map;
+    return cache;
   }
 
-  return function rolesFor(email) {
-    const hit = map()[email];
+  function rolesFor(email) {
+    const hit = load().map[email];
     return (hit && hit.length) ? hit.join(",") : DEFAULT_ROLE;
+  }
+  /* object {mod: "-"|"V"|"E"} — ว่าง = ไม่มี override ใช้ตารางทีมล้วน */
+  rolesFor.permsFor = function (email) { return load().ov[email] || {}; };
+  /* สตริงสำหรับ header/HTML: "m3b:E,promo:-" — charset ปลอดภัยโดยโครงสร้าง */
+  rolesFor.permString = function (email) {
+    const p = rolesFor.permsFor(email);
+    return Object.keys(p).sort().map(function (k) { return k + ":" + p[k]; }).join(",");
   };
+  return rolesFor;
 }
 
 /* ตัวช่วยสร้าง token — ใช้ในชุดทดสอบเท่านั้น ไม่ได้ใช้ตอนรันจริง */
@@ -356,6 +384,8 @@ function createServer(cfg) {
       if (v.ok) {
         res.setHeader("X-Auth-Email", v.email);   /* ให้ nginx เก็บลง access log */
         res.setHeader("X-Auth-Role", rolesFor(v.email));  /* nginx ฉีดลงหน้าให้ UI จัดสิทธิ์ */
+        const ps = rolesFor.permString(v.email);  /* override รายคน (ช่องติ๊ก) */
+        if (ps) res.setHeader("X-Auth-Perm", ps);
         res.writeHead(204).end();
       } else {
         res.writeHead(401).end();
@@ -425,13 +455,21 @@ function createServer(cfg) {
       if (!v.ok) { res.writeHead(401).end(); return; }
       const roles = rolesFor(v.email).split(",");
       const isAdmin = roles.indexOf("ADMIN") >= 0;
+      /* override รายคนทับตารางทีม — ชุดข้อมูลผูกกับโมดูลบนหน้าแอป */
+      const KEY_MOD = { pm: "promo", sch: "sched", cov: "m3b", fc: "fc" };
+      const perms = rolesFor.permsFor(v.email);
 
       function canRead(k) {
-        if (isAdmin || roles.indexOf("VIEW") >= 0) return true;
+        if (isAdmin) return true;
+        const ov = perms[KEY_MOD[k]];
+        if (ov) return ov !== "-";                 /* ติ๊กซ่อน = อ่านไม่ได้ด้วย */
+        if (roles.indexOf("VIEW") >= 0) return true;
         return roles.some(function (r) { return KEYS[k].noRead.indexOf(r) < 0; });
       }
       function canWrite(k) {
         if (isAdmin) return true;
+        const ov = perms[KEY_MOD[k]];
+        if (ov) return ov === "E";                 /* ติ๊กแก้ = เขียนได้แม้ทีมไม่ให้ · ติ๊กดู = ห้ามเขียนแม้เป็นเจ้าของทีม */
         return roles.some(function (r) { return KEYS[k].write.indexOf(r) >= 0; });
       }
       function fileOf(k) { return STATE_DIR + "/" + k + ".json"; }
@@ -581,14 +619,17 @@ function createServer(cfg) {
         });
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" })
            .end(JSON.stringify({ me: v.email, teams: ROLE_SET, map: map,
+                                 overrides: raw._overrides || {},
+                                 modules: MOD_IDS, levels: OV_LEVELS,
                                  defaultRole: "VIEW" }));
         return;
       }
 
       if (req.method === "POST") {
         readBody(req, function (body) {
-          let incoming;
-          try { incoming = JSON.parse(body || "{}").map; } catch (e) { incoming = null; }
+          let incoming, incomingOv;
+          try { const b2 = JSON.parse(body || "{}"); incoming = b2.map; incomingOv = b2.overrides; }
+          catch (e) { incoming = null; incomingOv = null; }
           if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
             res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
                .end(JSON.stringify({ error: "รูปแบบไม่ถูกต้อง — ต้องเป็น {map:{อีเมล:[ทีม]}}" }));
@@ -614,6 +655,30 @@ function createServer(cfg) {
           });
           if (!err && adminCount === 0)
             err = "ต้องเหลือ ADMIN อย่างน้อย 1 คน — ไม่งั้นจะไม่มีใครเข้าเมนูนี้ได้อีก";
+
+          /* ── override รายคน (ช่องติ๊ก) — ตรวจเข้มเท่าบทบาท ────────────── */
+          let cleanOv = null;
+          if (!err && incomingOv != null) {
+            if (typeof incomingOv !== "object" || Array.isArray(incomingOv)) {
+              err = "overrides ต้องเป็น object {อีเมล:{โมดูล:ระดับ}}";
+            } else {
+              cleanOv = {};
+              Object.keys(incomingOv).forEach(function (em) {
+                if (err) return;
+                const e2 = String(em).trim().toLowerCase();
+                if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+$/.test(e2)) { err = "อีเมลใน overrides ไม่ถูกต้อง: " + em; return; }
+                const per = {}, src = incomingOv[em] || {};
+                Object.keys(src).forEach(function (mod) {
+                  if (err) return;
+                  const lv = String(src[mod]).trim().toUpperCase();
+                  if (MOD_IDS.indexOf(mod) < 0) { err = "ไม่รู้จักโมดูล \"" + mod + "\""; return; }
+                  if (OV_LEVELS.indexOf(lv) < 0) { err = "ระดับต้องเป็น - / V / E (ได้ \"" + src[mod] + "\")"; return; }
+                  per[mod] = lv;
+                });
+                if (Object.keys(per).length) cleanOv[e2] = per;
+              });
+            }
+          }
           if (err) {
             res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" })
                .end(JSON.stringify({ error: err }));
@@ -626,6 +691,7 @@ function createServer(cfg) {
              read+write ธรรมดาเปิดแบบ O_TRUNC ไม่แตะ mode จึงผ่าน            */
           const prev = readMapRaw(); const out = {};
           Object.keys(prev).forEach(function (k) { if (k.charAt(0) === "_") out[k] = prev[k]; });
+          if (cleanOv != null) out._overrides = cleanOv;   /* ช่องติ๊กรายคน */
           Object.keys(clean).sort().forEach(function (k) { out[k] = clean[k]; });
           try {
             try { fs.writeFileSync(ROLES_PATH + ".bak", fs.readFileSync(ROLES_PATH)); }
