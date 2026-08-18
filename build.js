@@ -33,6 +33,11 @@ const JS = [
   "assets/js/forecast.js",  // Module 02+ — ต้องอยู่หลัง DATASETS
   "assets/js/session.js"
 ];
+/* ไฟล์ที่ "ตั้งใจตัดทิ้ง" จาก artifact — ใช้ได้เฉพาะบน webapp:
+   authz.js อ่านบทบาทจาก div ที่ nginx ฉีด · persist.js คุย /api/state
+   ทั้งคู่ไม่มีความหมายในไฟล์เดี่ยวที่เปิดจากดิสก์ (และ persist จะขึ้น
+   ป้ายเตือน offline ค้างเปล่า ๆ)                                          */
+const WEBAPP_ONLY = ["assets/js/authz.js", "assets/js/persist.js"];
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -84,6 +89,24 @@ function main() {
      ซึ่งมีความหมายเหมือนกันทั้งในสตริงและ regex ของ JS */
   const scriptBreaks = (js.match(/<\/script/gi) || []).length;
   if (scriptBreaks) js = js.replace(/<\/script/gi, "<\\/script");
+
+  /* ── กัน index.html กับรายการ JS ของสคริปต์นี้เดินคนละทาง ─────────────
+     เดิมบรรทัดล่างลบแท็ก assets/js ทิ้ง "ทั้งหมด" แต่ inline เฉพาะที่อยู่ใน
+     JS list — ไฟล์ที่เพิ่มใหม่ใน index.html จึงหายจาก artifact เงียบ ๆ
+     (เกิดขึ้นจริงกับ authz.js) · ต่อไปนี้: ไฟล์ต้องอยู่ใน JS หรือ WEBAPP_ONLY
+     เท่านั้น ไม่งั้น build ล้มทันที                                        */
+  const tagged = [];
+  (html.match(/<script src="(assets\/js\/[^"]+)"><\/script>/g) || []).forEach(function (t) {
+    tagged.push(t.match(/src="([^"]+)"/)[1]);
+  });
+  const unknown = tagged.filter((f) => JS.indexOf(f) < 0 && WEBAPP_ONLY.indexOf(f) < 0);
+  if (unknown.length) {
+    console.error("✗ index.html มีสคริปต์ที่ build.js ไม่รู้จัก: " + unknown.join(", "));
+    console.error("  เพิ่มเข้า JS (ให้ inline) หรือ WEBAPP_ONLY (ตั้งใจตัด) ให้ชัดเจน");
+    process.exit(1);
+  }
+  const dropped = tagged.filter((f) => WEBAPP_ONLY.indexOf(f) >= 0);
+  if (dropped.length) console.log("  ตัด (webapp-only): " + dropped.join(" · "));
 
   html = html.replace(/\n?\s*<script src="assets\/js\/[^"]+"><\/script>/g, "");
   html = injectBefore(html, "</body>", "<script>\n" + js + "\n</script>\n");
