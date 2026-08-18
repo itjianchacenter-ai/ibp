@@ -65,6 +65,11 @@ a.back{font-size:12px;color:var(--jc-gold);text-decoration:none;font-weight:600}
 .seg span:first-child{border-left:0}
 .seg span.on{background:var(--jc-ink);color:#fff;font-weight:600}
 .seg span.on.hide{background:var(--neg)} .seg span.on.edit{background:#8A9A6B}
+.ckbox{display:inline-flex;align-items:center;gap:.35em;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap}
+.ckbox input{width:16px;height:16px;accent-color:var(--jc-gold);cursor:pointer}
+.ckbox input:disabled{opacity:.35}
+select.rolesel{padding:.5em .7em;border:1px solid var(--jc-taupe);border-radius:3px;font-family:var(--font);font-size:13px;background:#fff;max-width:280px}
+select.rolesel:focus{outline:2px solid var(--jc-gold);outline-offset:-1px}
 .bar{position:sticky;bottom:0;background:var(--jc-paper);padding:.9rem 0 .2rem;border-top:1px solid var(--jc-sand)}
 </style>
 </head>
